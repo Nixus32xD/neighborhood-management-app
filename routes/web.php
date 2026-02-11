@@ -41,6 +41,14 @@ Route::get('/payments/{payment}/voucher', [PaymentsController::class, 'voucher']
     ->middleware('auth')
     ->name('payments.voucher');
 
+Route::get('/reports/payments/reconciliation/monthly', [PaymentsController::class, 'reconciliation'])
+    ->middleware('auth')
+    ->name('payments.reconciliation.monthly');
+
+Route::put('/payments/bank-accounts/{bankAccount}/opening-balance', [PaymentsController::class, 'updateOpeningBalance'])
+    ->middleware('auth')
+    ->name('payments.bank-accounts.opening-balance');
+
 
 Route::middleware(['auth'])->group(function () {
     Route::resource('payment-methods', PaymentsMethodsController::class);

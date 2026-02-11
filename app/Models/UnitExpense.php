@@ -16,6 +16,8 @@ class UnitExpense extends Model
         'extraordinary_amount',
         'fines_amount',
         'paid_amount',
+        'monthly_interest_applied_at',
+        'extraordinary_interest_applied_at',
     ];
 
     protected $casts = [
@@ -23,6 +25,8 @@ class UnitExpense extends Model
         'extraordinary_amount' => 'decimal:2',
         'fines_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
+        'monthly_interest_applied_at' => 'date',
+        'extraordinary_interest_applied_at' => 'date',
     ];
 
     /*

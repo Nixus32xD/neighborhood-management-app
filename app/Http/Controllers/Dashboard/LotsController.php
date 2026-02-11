@@ -16,25 +16,18 @@ class LotsController extends Controller
     {
         $neighborhoodId = session('neighborhood_id');
 
-        // Base query (la usamos para stats y data)
         $unitsQuery = Unit::with(['owners.residents'])
             ->where('neighborhood_id', $neighborhoodId);
 
-        /*
-    |--------------------------------------------------------------------------
-    | STATS (antes del map)
-    |--------------------------------------------------------------------------
-    */
-
         $totalLots = $unitsQuery->count();
+        $totalSurface = (float) $unitsQuery->sum('surface_area');
+        $averageSurface = $totalLots > 0 ? $totalSurface / $totalLots : 0;
 
-        $totalSurface = $unitsQuery->sum('surface_area');
-
-        $averageSurface = $totalLots > 0
-            ? $totalSurface / $totalLots
-            : 0;
-
-        $totalCoefficient = $unitsQuery->sum('expense_coefficient');
+        // Soporta coeficiente en formato porcentaje (4.68) o decimal (0.0468)
+        $rawTotalCoefficient = (float) $unitsQuery->sum('expense_coefficient');
+        $totalCoefficient = $rawTotalCoefficient <= 1.5
+            ? ($rawTotalCoefficient * 100)
+            : $rawTotalCoefficient;
 
         $stats = [
             'totalLots' => $totalLots,
@@ -43,37 +36,38 @@ class LotsController extends Controller
             'totalCoefficient' => round($totalCoefficient, 4),
         ];
 
-        /*
-    |--------------------------------------------------------------------------
-    | LOTS DATA
-    |--------------------------------------------------------------------------
-    */
-
         $units = $unitsQuery
             ->orderByRaw('CAST(uf_number AS UNSIGNED) ASC')
             ->get()
             ->map(function ($unit) {
                 $owner = $unit->owners->first();
 
+                $rawCoefficient = $unit->expense_coefficient;
+                $expensePercentage = 0;
+
+                if ($rawCoefficient !== null) {
+                    $rawCoefficient = (float) $rawCoefficient;
+                    $expensePercentage = $rawCoefficient <= 1
+                        ? $rawCoefficient * 100
+                        : $rawCoefficient;
+                }
+
                 return [
                     'id' => $unit->id,
                     'uf_number' => 'UF-' . $unit->uf_number,
-                    'surface_area' => $unit->surface_area,
-                    'expense_percentage' => $unit->expense_percentage,
-                    'base_expense' => null, // luego se puede calcular dinámico
+                    'surface_area' => (float) ($unit->surface_area ?? 0),
+                    'expense_percentage' => $expensePercentage,
+                    'base_expense' => (float) ($unit->base_expense ?? 0),
                     'status' => $unit->active ? 'active' : 'inactive',
-
                     'owner_name' => $owner?->full_name,
                     'owner_email' => $owner?->email,
                     'owner_phone' => $owner?->phone ?? null,
                     'owner_dni' => $owner?->dni ?? null,
-
                     'residents' => $owner?->residents?->map(fn($r) => [
                         'id' => $r->id,
                         'name' => $r->full_name,
                         'relation' => $r->relation,
                     ]) ?? [],
-
                     'dimensions' => $unit->dimensions,
                     'notes' => $unit->notes,
                 ];
@@ -84,7 +78,6 @@ class LotsController extends Controller
             'stats' => $stats,
         ]);
     }
-
 
     /**
      * Show the form for creating a new resource.
@@ -134,3 +127,4 @@ class LotsController extends Controller
         //
     }
 }
+

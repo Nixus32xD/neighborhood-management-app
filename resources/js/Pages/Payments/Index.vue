@@ -6,6 +6,7 @@ import Card from '@/Components/Card.vue'
 import DataTable from '@/Components/DataTable.vue'
 import Button from '@/Components/Button.vue'
 import Modal from '@/Components/Modal.vue'
+import StatCard from '@/Components/StatCard.vue'
 import FormInput from '@/Components/FormInput.vue'
 import FormSelect from '@/Components/FormSelect.vue'
 import FormTextarea from '@/Components/FormTextarea.vue'
@@ -19,76 +20,35 @@ import {
     Upload,
     FileText,
     Building,
-    CreditCard
+    CreditCard,
+    TrendingUp,
+    TrendingDown,
+    Pencil
 } from 'lucide-vue-next'
 
 const props = defineProps({
     movements: {
         type: Array,
-        default: () => [
-            {
-                id: 1,
-                date: '2024-01-15',
-                amount: 15000,
-                description: 'Security service payment',
-                recipient: 'Seguridad ABC S.A.',
-                payment_method: 'Bank Transfer',
-                bank_account: 'Banco Nación - 123456789',
-                voucher_url: '/vouchers/001.pdf',
-                is_high_value: true
-            },
-            {
-                id: 2,
-                date: '2024-01-14',
-                amount: 5500,
-                description: 'Garden maintenance',
-                recipient: 'Jardinería Verde',
-                payment_method: 'Bank Transfer',
-                bank_account: 'Banco Nación - 123456789',
-                voucher_url: '/vouchers/002.pdf',
-                is_high_value: false
-            },
-            {
-                id: 3,
-                date: '2024-01-12',
-                amount: 8200,
-                description: 'Pool cleaning service',
-                recipient: 'Piletas Limpias',
-                payment_method: 'Cash',
-                bank_account: null,
-                voucher_url: '/vouchers/003.pdf',
-                is_high_value: false
-            },
-            {
-                id: 4,
-                date: '2024-01-10',
-                amount: 25000,
-                description: 'Electrical repairs - common areas',
-                recipient: 'Electricidad Total',
-                payment_method: 'Bank Transfer',
-                bank_account: 'Banco Galicia - 987654321',
-                voucher_url: null,
-                is_high_value: true
-            },
-            {
-                id: 5,
-                date: '2024-01-08',
-                amount: 3200,
-                description: 'Office supplies',
-                recipient: 'Librería Central',
-                payment_method: 'Cash',
-                bank_account: null,
-                voucher_url: '/vouchers/005.pdf',
-                is_high_value: false
-            }
-        ]
+        default: () => []
     },
     bankAccounts: {
         type: Array,
-        default: () => [
-            { value: 'banco-nacion', label: 'Banco Nación - 123456789' },
-            { value: 'banco-galicia', label: 'Banco Galicia - 987654321' }
-        ]
+        default: () => []
+    },
+    summary: {
+        type: Object,
+        default: () => ({
+            totalOutflow: 0,
+            monthlyOutflow: 0,
+            monthlyIncome: 0,
+            openingBalanceTotal: 0,
+            currentBalanceTotal: 0,
+            estimatedBalance: 0
+        })
+    },
+    accountsSummary: {
+        type: Array,
+        default: () => []
     }
 })
 
@@ -123,6 +83,15 @@ const paymentMethodOptions = [
 ]
 
 const showVoucherModal = ref(false)
+const activeTab = ref('movements')
+const reportPeriod = ref(new Date().toISOString().slice(0, 7))
+const showOpeningBalanceModal = ref(false)
+const selectedAccount = ref(null)
+
+const openingBalanceForm = useForm({
+    opening_balance: '',
+    opening_balance_date: ''
+})
 
 const isPdf = computed(() => {
     if (!selectedMovement.value?.voucher_url) return false
@@ -133,6 +102,34 @@ const isPdf = computed(() => {
 const openVoucher = (movement) => {
     selectedMovement.value = movement; // <--- Esto es lo que faltaba
     showVoucherModal.value = true;
+}
+
+const openMonthlyReconciliation = () => {
+    const url = route('payments.reconciliation.monthly', { period: reportPeriod.value })
+    window.open(url, '_blank')
+}
+
+const openOpeningBalanceModal = (account) => {
+    selectedAccount.value = account
+    openingBalanceForm.reset()
+    openingBalanceForm.clearErrors()
+    openingBalanceForm.opening_balance = account.opening_balance ?? 0
+    openingBalanceForm.opening_balance_date = account.opening_balance_date ?? new Date().toISOString().slice(0, 10)
+    showOpeningBalanceModal.value = true
+}
+
+const submitOpeningBalance = () => {
+    if (!selectedAccount.value) return
+
+    openingBalanceForm.put(
+        route('payments.bank-accounts.opening-balance', selectedAccount.value.id),
+        {
+            onSuccess: () => {
+                showOpeningBalanceModal.value = false
+                selectedAccount.value = null
+            }
+        }
+    )
 }
 
 
@@ -226,6 +223,10 @@ const filteredMovements = computed(() => {
     })
 })
 
+const filteredOutflow = computed(() =>
+    filteredMovements.value.reduce((acc, movement) => acc + Number(movement.amount || 0), 0)
+)
+
 const isDragging = ref(false)
 
 const handleDrop = (e) => {
@@ -242,8 +243,27 @@ const handleDrop = (e) => {
 
 <template>
     <DashboardLayout title="Pagos & Movimientos Bancarios">
-        <!-- Filters Card -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatCard title="Egresos Totales" :value="formatCurrency(summary.totalOutflow)" :icon="TrendingDown" />
+            <StatCard title="Egresos Mes Actual" :value="formatCurrency(summary.monthlyOutflow)" :icon="DollarSign" />
+            <StatCard title="Ingresos Mes Actual" :value="formatCurrency(summary.monthlyIncome)" :icon="TrendingUp" />
+            <StatCard title="Saldo Actual (Ctas)" :value="formatCurrency(summary.currentBalanceTotal)"
+                :icon="Building" />
+        </div>
+
         <Card class="mb-6">
+            <div class="flex items-center gap-2">
+                <Button :variant="activeTab === 'movements' ? 'primary' : 'secondary'" @click="activeTab = 'movements'">
+                    Movimientos
+                </Button>
+                <Button :variant="activeTab === 'reconciliation' ? 'primary' : 'secondary'"
+                    @click="activeTab = 'reconciliation'">
+                    Generar Rendicion
+                </Button>
+            </div>
+        </Card>
+
+        <Card v-if="activeTab === 'movements'" class="mb-6">
             <div class="flex flex-wrap items-end gap-4">
                 <div class="flex items-center gap-2">
                     <Filter class="w-4 h-4 text-slate-400" />
@@ -267,8 +287,50 @@ const handleDrop = (e) => {
             </div>
         </Card>
 
-        <!-- Movements Table -->
-        <Card title="Movimientos de cuentas bancarias"
+        <Card v-if="activeTab === 'movements'" class="mb-6" title="Saldos de Cuentas Bancarias"
+            subtitle="Configurá saldo inicial y fecha de corte para mantener sincronizado el saldo actual.">
+            <div class="space-y-3">
+                <div class="text-sm text-slate-600">
+                    Saldo inicial total: <span class="font-semibold text-slate-900">{{ formatCurrency(summary.openingBalanceTotal) }}</span>
+                    · Saldo actual total: <span class="font-semibold text-slate-900">{{ formatCurrency(summary.currentBalanceTotal) }}</span>
+                    · Resultado mensual estimado: <span class="font-semibold text-slate-900">{{ formatCurrency(summary.estimatedBalance) }}</span>
+                </div>
+
+                <div v-if="accountsSummary.length" class="overflow-x-auto">
+                    <table class="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="text-left px-3 py-2">Cuenta</th>
+                                <th class="text-right px-3 py-2">Saldo Inicial</th>
+                                <th class="text-left px-3 py-2">Fecha Corte</th>
+                                <th class="text-right px-3 py-2">Saldo Actual</th>
+                                <th class="text-right px-3 py-2">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="account in accountsSummary" :key="account.id" class="border-t border-slate-200">
+                                <td class="px-3 py-2">{{ account.label }}</td>
+                                <td class="px-3 py-2 text-right">{{ formatCurrency(account.opening_balance) }}</td>
+                                <td class="px-3 py-2">{{ account.opening_balance_date || '-' }}</td>
+                                <td class="px-3 py-2 text-right font-semibold">{{ formatCurrency(account.current_balance) }}</td>
+                                <td class="px-3 py-2 text-right">
+                                    <Button variant="secondary" size="sm" @click="openOpeningBalanceModal(account)">
+                                        <Pencil class="w-4 h-4 mr-1" />
+                                        Ajustar
+                                    </Button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div v-else class="text-sm text-slate-500">
+                    No hay cuentas bancarias configuradas para el barrio.
+                </div>
+            </div>
+        </Card>
+
+        <Card v-if="activeTab === 'movements'" title="Movimientos de cuentas bancarias"
             subtitle="Realice un seguimiento de todos los pagos y transacciones para mayor claridad en la auditoría.">
             <template #header-actions>
                 <Button @click="openCreateModal">
@@ -278,6 +340,10 @@ const handleDrop = (e) => {
             </template>
 
             <template #default>
+                <div class="mb-4 text-sm text-slate-600">
+                    Total filtrado: <span class="font-semibold text-slate-900">{{ formatCurrency(filteredOutflow) }}</span>
+                </div>
+
                 <DataTable :columns="columns" :data="filteredMovements" empty-title="No se encontraron movimientos"
                     empty-description="No hay transacciones que coincidan con los filtros actuales.">
                     <template #cell-date="{ value }">
@@ -329,6 +395,22 @@ const handleDrop = (e) => {
                     </template>
                 </DataTable>
             </template>
+        </Card>
+
+        <Card v-if="activeTab === 'reconciliation'" title="Rendicion Mensual para Propietarios"
+            subtitle="Genera un reporte del periodo con estado de expensas y movimientos bancarios.">
+            <div class="space-y-4">
+                <FormInput v-model="reportPeriod" type="month" label="Periodo de rendicion" required />
+                <div class="flex items-center gap-3">
+                    <Button variant="primary" @click="openMonthlyReconciliation" :disabled="!reportPeriod">
+                        <FileText class="w-4 h-4 mr-2" />
+                        Generar Rendicion
+                    </Button>
+                    <span class="text-sm text-slate-500">
+                        Se abre en nueva pestaña para imprimir o guardar como PDF.
+                    </span>
+                </div>
+            </div>
         </Card>
 
         <!-- Create Movement Modal -->
@@ -523,6 +605,27 @@ const handleDrop = (e) => {
 
                     <Button variant="secondary" @click="showVoucherModal = false">
                         Cerrar
+                    </Button>
+                </div>
+            </template>
+        </Modal>
+
+        <Modal :show="showOpeningBalanceModal" title="Configurar Saldo Inicial de Cuenta" max-width="md"
+            @close="showOpeningBalanceModal = false">
+            <form @submit.prevent="submitOpeningBalance" class="space-y-4">
+                <FormInput v-model="openingBalanceForm.opening_balance" type="number" step="0.01"
+                    label="Saldo inicial" :error="openingBalanceForm.errors.opening_balance" required />
+                <FormInput v-model="openingBalanceForm.opening_balance_date" type="date" label="Fecha de corte inicial"
+                    :error="openingBalanceForm.errors.opening_balance_date" required />
+            </form>
+
+            <template #footer>
+                <div class="flex justify-end gap-3">
+                    <Button variant="secondary" @click="showOpeningBalanceModal = false">
+                        Cancelar
+                    </Button>
+                    <Button :loading="openingBalanceForm.processing" @click="submitOpeningBalance">
+                        Guardar
                     </Button>
                 </div>
             </template>

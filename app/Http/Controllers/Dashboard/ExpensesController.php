@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Models\Neighborhood;
 use App\Models\UnitExpense;
-use App\Models\PaymentExpense;
 use App\Services\ExpenseGeneratorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -142,6 +141,13 @@ class ExpensesController extends Controller
 
     public function addFine(Request $request, UnitExpense $expense)
     {
+        $neighborhoodId = session('neighborhood_id');
+        $belongsToActiveNeighborhood = $expense->unit()
+            ->where('neighborhood_id', $neighborhoodId)
+            ->exists();
+
+        abort_unless($belongsToActiveNeighborhood, 403);
+
         $data = $request->validate([
             'amount' => 'required|numeric|min:1',
             'reason' => 'nullable|string|max:255',
@@ -153,18 +159,33 @@ class ExpensesController extends Controller
     }
     public function addExtraordinary(Request $request)
     {
+        $neighborhoodId = session('neighborhood_id');
         $data = $request->validate([
             'period' => 'required|date_format:Y-m',
             'amount' => 'required|numeric|min:1',
         ]);
 
-        UnitExpense::where('period', $data['period'])
-            ->whereHas(
-                'unit',
-                fn($q) =>
-                $q->where('neighborhood_id', session('neighborhood_id'))
-            )
-            ->increment('extraordinary_amount', $data['amount']);
+        $neighborhood = Neighborhood::with('units:id,neighborhood_id')
+            ->findOrFail($neighborhoodId);
+
+        DB::transaction(function () use ($neighborhood, $data) {
+            foreach ($neighborhood->units as $unit) {
+                $expense = UnitExpense::firstOrCreate(
+                    [
+                        'unit_id' => $unit->id,
+                        'period' => $data['period'],
+                    ],
+                    [
+                        'monthly_amount' => 0,
+                        'extraordinary_amount' => 0,
+                        'fines_amount' => 0,
+                        'paid_amount' => 0,
+                    ]
+                );
+
+                $expense->increment('extraordinary_amount', $data['amount']);
+            }
+        });
 
         return back()->with('success', 'Expensa extraordinaria aplicada.');
     }

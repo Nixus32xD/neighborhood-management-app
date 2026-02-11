@@ -28,7 +28,6 @@ class PaymentsMethodsController extends Controller
                     'id' => $owner?->id,
                     'uf_number' => 'UF-' . $unit->uf_number,
                     'owner' => $owner?->full_name,
-
                     'preferred_method' => $owner?->preferred_method,
                     'bank_name' => $owner?->bank_name,
                     'account_holder' => $owner?->account_holder,
@@ -37,10 +36,11 @@ class PaymentsMethodsController extends Controller
                     'custom_method' => $owner?->custom_method,
                 ];
             })
-            ->filter(fn($row) => $row['id']); // elimina unidades sin dueño
+            ->filter(fn($row) => !empty($row['id']))
+            ->values();
 
         return Inertia::render('PaymentMethods/Index', [
-            'paymentMethods' => $paymentMethods
+            'paymentMethods' => $paymentMethods,
         ]);
     }
 
@@ -79,19 +79,22 @@ class PaymentsMethodsController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Owner $owner)
+    public function update(Request $request, string $id)
     {
-        $data = $request->validate([
-            'preferred_method' => 'required|string',
-            'custom_method' => 'nullable|string|max:255',
+        $neighborhoodId = session('neighborhood_id');
 
+        $owner = Owner::whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
+            ->findOrFail($id);
+
+        $data = $request->validate([
+            'preferred_method' => 'required|in:Bank Transfer,Cash,Other',
+            'custom_method' => 'nullable|string|max:255',
             'bank_name' => 'nullable|string|max:255',
             'account_holder' => 'nullable|string|max:255',
             'cbu' => 'nullable|string|max:30',
             'alias' => 'nullable|string|max:50',
         ]);
 
-        // Limpieza lógica según método
         if ($data['preferred_method'] !== 'Bank Transfer') {
             $data['bank_name'] = null;
             $data['account_holder'] = null;
@@ -105,7 +108,7 @@ class PaymentsMethodsController extends Controller
 
         $owner->update($data);
 
-        return back()->with('success', 'Payment method updated successfully');
+        return back()->with('success', 'Metodo de pago actualizado correctamente.');
     }
 
     /**
@@ -116,3 +119,4 @@ class PaymentsMethodsController extends Controller
         //
     }
 }
+

@@ -7,12 +7,21 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class BankAccount extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'neighborhood_id',
         'bank_name',
         'account_type',
         'currency',
         'alias',
+        'opening_balance',
+        'opening_balance_date',
+    ];
+
+    protected $casts = [
+        'opening_balance' => 'decimal:2',
+        'opening_balance_date' => 'date',
     ];
 
     public function neighborhood()

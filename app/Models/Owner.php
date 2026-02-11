@@ -14,6 +14,12 @@ class Owner extends Model
         'full_name',
         'email',
         'people_count',
+        'preferred_method',
+        'bank_name',
+        'account_holder',
+        'cbu',
+        'alias',
+        'custom_method',
     ];
 
     public function unit()

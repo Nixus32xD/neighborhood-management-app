@@ -78,6 +78,21 @@ const generateForm = useForm({
     base_meters: 500 // Para CC2 (Divisor default)
 })
 
+// Modal Extraordinaria
+const showExtraordinaryModal = ref(false)
+const extraordinaryForm = useForm({
+    period: new Date().toISOString().slice(0, 7),
+    amount: ''
+})
+
+// Modal Multa Manual
+const showFineModal = ref(false)
+const selectedExpenseForFine = ref(null)
+const fineForm = useForm({
+    amount: '',
+    reason: ''
+})
+
 // --- COMPUTED PROPERTIES (Usando props directamente para reactividad) ---
 
 // Opciones para el select de unidad (solo las que deben plata)
@@ -242,6 +257,49 @@ const submitGeneration = () => {
     })
 }
 
+const openExtraordinaryModal = () => {
+    extraordinaryForm.reset()
+    extraordinaryForm.period = getCurrentPeriod()
+    showExtraordinaryModal.value = true
+}
+
+const closeExtraordinaryModal = () => {
+    showExtraordinaryModal.value = false
+    extraordinaryForm.reset()
+}
+
+const submitExtraordinary = () => {
+    extraordinaryForm.post(route('expenses.extraordinary'), {
+        onSuccess: () => closeExtraordinaryModal()
+    })
+}
+
+const openFineModal = (row) => {
+    selectedExpenseForFine.value = row
+    fineForm.reset()
+
+    const suggestedFine = Number(row.outstanding_debt) > 0
+        ? (Number(row.outstanding_debt) * 0.1).toFixed(2)
+        : ''
+
+    fineForm.amount = suggestedFine
+    showFineModal.value = true
+}
+
+const closeFineModal = () => {
+    showFineModal.value = false
+    selectedExpenseForFine.value = null
+    fineForm.reset()
+}
+
+const submitFine = () => {
+    if (!selectedExpenseForFine.value) return
+
+    fineForm.post(route('expenses.fine', selectedExpenseForFine.value.id), {
+        onSuccess: () => closeFineModal()
+    })
+}
+
 // Configuración de columnas para DataTable
 const columns = [
     { key: 'period', label: 'Período' },
@@ -342,7 +400,7 @@ const paymentMethodOptions = [
                     </template>
 
                     <template #cell-actions="{ row }">
-                        <Button variant="danger" @click="openFineModal(row)">
+                        <Button variant="danger" @click="openFineModal(row)" :disabled="Number(row.outstanding_debt) <= 0">
                             <AlertTriangle class="w-4 h-4" />
                         </Button>
                     </template>
@@ -519,6 +577,67 @@ const paymentMethodOptions = [
                     <Button variant="secondary" @click="showGenerateModal = false">Cancelar</Button>
                     <Button @click="submitGeneration" :loading="generateForm.processing">
                         Confirmar Generación
+                    </Button>
+                </div>
+            </template>
+        </Modal>
+
+        <Modal :show="showExtraordinaryModal" title="Generar Expensa Extraordinaria" max-width="md"
+            @close="closeExtraordinaryModal">
+            <form @submit.prevent="submitExtraordinary" class="space-y-5">
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
+                    <div class="mt-0.5">
+                        <TrendingUp class="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-amber-900">Aplicación Masiva</h4>
+                        <p class="text-xs text-amber-700 mt-1">
+                            Se sumará el monto extraordinario a todas las unidades del período seleccionado.
+                        </p>
+                    </div>
+                </div>
+
+                <FormInput v-model="extraordinaryForm.period" type="month" label="Período"
+                    :error="extraordinaryForm.errors.period" required />
+
+                <FormInput v-model="extraordinaryForm.amount" type="number" label="Monto Extraordinario por Unidad"
+                    placeholder="Ej: 75000" :error="extraordinaryForm.errors.amount" min="1" step="0.01" required />
+            </form>
+
+            <template #footer>
+                <div class="flex justify-end gap-3">
+                    <Button variant="secondary" @click="closeExtraordinaryModal">Cancelar</Button>
+                    <Button @click="submitExtraordinary" :loading="extraordinaryForm.processing">
+                        Confirmar Extraordinaria
+                    </Button>
+                </div>
+            </template>
+        </Modal>
+
+        <Modal :show="showFineModal" title="Aplicar Multa Manual" max-width="md" @close="closeFineModal">
+            <form @submit.prevent="submitFine" class="space-y-5">
+                <div v-if="selectedExpenseForFine" class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm">
+                    <p class="text-red-900 font-medium">
+                        {{ selectedExpenseForFine.uf_number }} · {{ selectedExpenseForFine.period }}
+                    </p>
+                    <p class="text-red-700 mt-1">
+                        Saldo pendiente actual: {{ formatCurrency(selectedExpenseForFine.outstanding_debt) }}
+                    </p>
+                </div>
+
+                <FormInput v-model="fineForm.amount" type="number" label="Monto de la multa"
+                    :error="fineForm.errors.amount" min="1" step="0.01" required />
+
+                <FormTextarea v-model="fineForm.reason" label="Motivo (opcional)"
+                    :error="fineForm.errors.reason" :rows="2" placeholder="Ej: Interés por mora / multa administrativa" />
+            </form>
+
+            <template #footer>
+                <div class="flex justify-end gap-3">
+                    <Button variant="secondary" @click="closeFineModal">Cancelar</Button>
+                    <Button variant="danger" @click="submitFine" :loading="fineForm.processing"
+                        :disabled="!fineForm.amount || fineForm.processing">
+                        Aplicar Multa
                     </Button>
                 </div>
             </template>
