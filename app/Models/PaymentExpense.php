@@ -15,6 +15,11 @@ class PaymentExpense extends Model
         'reference',
     ];
 
+    protected $casts = [
+        'payment_date' => 'date',
+        'amount' => 'decimal:2',
+    ];
+
     public function unitExpense()
     {
         return $this->belongsTo(UnitExpense::class);
