@@ -197,9 +197,9 @@ const formatCurrency = (amount) => {
             <!-- Stats Cards -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Lotes Totales" :value="stats.totalLots" :icon="Building2" />
-                <StatCard title="Área de superficie total" :value="`${formatNumber(stats.totalSurface, 0)} m²`"
+                <StatCard title="Área de superficie total" :value="`${formatNumber(stats.totalSurface, 2)} m²`"
                     :icon="Ruler" />
-                <StatCard title="Tamaño promedio del lote" :value="`${formatNumber(stats.averageSurface, 1)} m²`"
+                <StatCard title="Tamaño promedio del lote" :value="`${formatNumber(stats.averageSurface, 2)} m²`"
                     :icon="BarChart3" />
                 <StatCard title="Coeficiente total" :value="`${formatNumber(stats.totalCoefficient, 2)}%`"
                     :icon="Percent" :subtitle="stats.totalCoefficient === 100 ? 'Equilibrado' : 'Revisión necesaria'" />
@@ -319,7 +319,7 @@ const formatCurrency = (amount) => {
                                             'text-sm font-medium',
                                             isHighSurface(lot.surface_area) ? 'text-amber-600 bg-amber-50 px-2 py-0.5 rounded' : 'text-slate-700'
                                         ]">
-                                            {{ formatNumber(lot.surface_area, 1) }} m²
+                                            {{ formatNumber(lot.surface_area, 2) }} m²
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
