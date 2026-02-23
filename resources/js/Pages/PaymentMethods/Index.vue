@@ -182,7 +182,7 @@ const formatCBU = (cbu) => {
             @close="showEditModal = false">
             <div v-if="selectedOwner" class="space-y-6">
                 <div class="bg-slate-50 rounded-lg p-4">
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <p class="text-sm text-slate-500">Unidad</p>
                             <p class="font-medium text-slate-900">{{ selectedOwner.uf_number }}</p>
@@ -216,12 +216,11 @@ const formatCBU = (cbu) => {
             </div>
 
             <template #footer>
-                <div class="flex justify-end gap-3">
-                    <Button variant="secondary" @click="showEditModal = false">Cancelar</Button>
-                    <Button :loading="form.processing" @click="submitEdit">Guardar cambios</Button>
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button class="w-full sm:w-auto" variant="secondary" @click="showEditModal = false">Cancelar</Button>
+                    <Button class="w-full sm:w-auto" :loading="form.processing" @click="submitEdit">Guardar cambios</Button>
                 </div>
             </template>
         </Modal>
     </DashboardLayout>
 </template>
-

@@ -252,11 +252,11 @@ const handleDrop = (e) => {
         </div>
 
         <Card class="mb-6">
-            <div class="flex items-center gap-2">
-                <Button :variant="activeTab === 'movements' ? 'primary' : 'secondary'" @click="activeTab = 'movements'">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button class="w-full sm:w-auto" :variant="activeTab === 'movements' ? 'primary' : 'secondary'" @click="activeTab = 'movements'">
                     Movimientos
                 </Button>
-                <Button :variant="activeTab === 'reconciliation' ? 'primary' : 'secondary'"
+                <Button class="w-full sm:w-auto" :variant="activeTab === 'reconciliation' ? 'primary' : 'secondary'"
                     @click="activeTab = 'reconciliation'">
                     Generar Rendicion
                 </Button>
@@ -264,24 +264,24 @@ const handleDrop = (e) => {
         </Card>
 
         <Card v-if="activeTab === 'movements'" class="mb-6">
-            <div class="flex flex-wrap items-end gap-4">
-                <div class="flex items-center gap-2">
+            <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
                     <Filter class="w-4 h-4 text-slate-400" />
                     <span class="text-sm font-medium text-slate-700">Filtros:</span>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
                     <Calendar class="w-4 h-4 text-slate-400" />
-                    <FormInput v-model="dateFrom" type="date" placeholder="De" class="w-36" />
+                    <FormInput v-model="dateFrom" type="date" placeholder="De" class="flex-1 sm:w-36" />
                     <span class="text-slate-400">A</span>
-                    <FormInput v-model="dateTo" type="date" placeholder="A" class="w-36" />
+                    <FormInput v-model="dateTo" type="date" placeholder="A" class="flex-1 sm:w-36" />
                 </div>
 
-                <FormSelect v-model="amountFilter" :options="amountOptions" class="w-44" />
+                <FormSelect v-model="amountFilter" :options="amountOptions" class="w-full sm:w-44" />
 
-                <FormSelect v-model="typeFilter" :options="typeOptions" class="w-36" />
+                <FormSelect v-model="typeFilter" :options="typeOptions" class="w-full sm:w-36" />
 
-                <Button variant="ghost" size="sm" @click="clearFilters">
+                <Button class="w-full sm:w-auto" variant="ghost" size="sm" @click="clearFilters">
                     Limpiar Filtros
                 </Button>
             </div>
@@ -401,8 +401,8 @@ const handleDrop = (e) => {
             subtitle="Genera un reporte del periodo con estado de expensas y movimientos bancarios.">
             <div class="space-y-4">
                 <FormInput v-model="reportPeriod" type="month" label="Periodo de rendicion" required />
-                <div class="flex items-center gap-3">
-                    <Button variant="primary" @click="openMonthlyReconciliation" :disabled="!reportPeriod">
+                <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+                    <Button class="w-full sm:w-auto" variant="primary" @click="openMonthlyReconciliation" :disabled="!reportPeriod">
                         <FileText class="w-4 h-4 mr-2" />
                         Generar Rendicion
                     </Button>
@@ -417,7 +417,7 @@ const handleDrop = (e) => {
         <Modal :show="showCreateModal" title="Agregar movimiento bancario" max-width="lg"
             @close="showCreateModal = false">
             <form @submit.prevent="submitCreate" class="space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <FormInput v-model="form.date" type="date" label="Fecha" :error="form.errors.date" required />
                     <FormInput v-model="form.amount" type="number" label="Cantidad" placeholder="0.00"
                         :error="form.errors.amount" required />
@@ -429,7 +429,7 @@ const handleDrop = (e) => {
                 <FormInput v-model="form.recipient" label="Nombre del destinatario"
                     placeholder="¿Quién recibió el pago?" :error="form.errors.recipient" required />
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <FormSelect v-model="form.payment_method" label="Método de pago" :options="paymentMethodOptions"
                         :error="form.errors.payment_method" required />
                     <FormSelect v-model="form.bank_account" label="Cuenta bancaria" :options="bankAccounts"
@@ -495,11 +495,11 @@ const handleDrop = (e) => {
             </form>
 
             <template #footer>
-                <div class="flex justify-end gap-3">
-                    <Button variant="secondary" @click="showCreateModal = false">
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button class="w-full sm:w-auto" variant="secondary" @click="showCreateModal = false">
                         Cancelar
                     </Button>
-                    <Button :loading="form.processing" @click="submitCreate">
+                    <Button class="w-full sm:w-auto" :loading="form.processing" @click="submitCreate">
                         Agregar Movimiento
                     </Button>
                 </div>
@@ -521,7 +521,7 @@ const handleDrop = (e) => {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <div>
                         <p class="text-sm font-medium text-slate-500">Fecha</p>
                         <p class="mt-1 text-slate-900">{{ formatDate(selectedMovement.date) }}</p>
@@ -579,7 +579,7 @@ const handleDrop = (e) => {
 
             <template #footer>
                 <div class="flex justify-end">
-                    <Button variant="secondary" @click="showDetailModal = false">
+                    <Button class="w-full sm:w-auto" variant="secondary" @click="showDetailModal = false">
                         Cerrar
                     </Button>
                 </div>
@@ -597,13 +597,13 @@ const handleDrop = (e) => {
             </div>
 
             <template #footer>
-                <div class="flex justify-between w-full">
+                <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <a :href="selectedMovement.voucher_url" target="_blank"
-                        class="text-sm text-slate-500 hover:text-slate-700">
+                        class="text-sm text-slate-500 hover:text-slate-700 break-all">
                         Abrir en nueva pestaña
                     </a>
 
-                    <Button variant="secondary" @click="showVoucherModal = false">
+                    <Button class="w-full sm:w-auto" variant="secondary" @click="showVoucherModal = false">
                         Cerrar
                     </Button>
                 </div>
@@ -620,11 +620,11 @@ const handleDrop = (e) => {
             </form>
 
             <template #footer>
-                <div class="flex justify-end gap-3">
-                    <Button variant="secondary" @click="showOpeningBalanceModal = false">
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button class="w-full sm:w-auto" variant="secondary" @click="showOpeningBalanceModal = false">
                         Cancelar
                     </Button>
-                    <Button :loading="openingBalanceForm.processing" @click="submitOpeningBalance">
+                    <Button class="w-full sm:w-auto" :loading="openingBalanceForm.processing" @click="submitOpeningBalance">
                         Guardar
                     </Button>
                 </div>

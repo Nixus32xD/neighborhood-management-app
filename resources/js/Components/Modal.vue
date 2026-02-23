@@ -62,7 +62,7 @@ const handleEscape = (e) => {
     >
       <div
         v-if="show"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 flex items-end justify-center p-2 sm:items-center sm:p-4"
       >
         <!-- Backdrop -->
         <div
@@ -73,12 +73,12 @@ const handleEscape = (e) => {
         <!-- Modal content -->
         <div
           :class="[
-            'relative bg-white rounded-lg shadow-xl w-full',
+            'relative bg-white rounded-lg shadow-xl w-full max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] flex flex-col',
             maxWidthClass[maxWidth]
           ]"
         >
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div class="flex items-center justify-between px-4 py-4 border-b border-slate-200 sm:px-6">
             <h3 class="text-lg font-semibold text-slate-900">{{ title }}</h3>
             <button
               type="button"
@@ -90,12 +90,12 @@ const handleEscape = (e) => {
           </div>
 
           <!-- Body -->
-          <div class="px-6 py-4">
+          <div class="px-4 py-4 overflow-y-auto sm:px-6">
             <slot />
           </div>
 
           <!-- Footer -->
-          <div v-if="$slots.footer" class="px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-lg">
+          <div v-if="$slots.footer" class="px-4 py-4 border-t border-slate-200 bg-slate-50 rounded-b-lg sm:px-6">
             <slot name="footer" />
           </div>
         </div>

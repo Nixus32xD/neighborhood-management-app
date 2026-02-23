@@ -335,29 +335,29 @@ const paymentMethodOptions = [
 
         <Card title="Panorama Financiero de la UF" subtitle="Expensas mensuales, multas y saldos pendientes">
             <template #header-actions>
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-2">
+                <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
                         <Filter class="w-4 h-4 text-slate-400" />
                         <FormSelect v-model="statusFilter" :options="statusOptions" placeholder="Filtrar por estado"
-                            class="w-40" />
+                            class="w-full sm:w-40" />
                     </div>
 
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
                         <CalendarPlus class="w-4 h-4 text-slate-400" />
                         <FormSelect v-model="periodFilter" :options="periodOptions" placeholder="Filtrar por período"
-                            class="w-40" />
+                            class="w-full sm:w-40" />
                     </div>
 
-                    <Button variant="primary" @click="openGenerateModal">
+                    <Button class="w-full sm:w-auto" variant="primary" @click="openGenerateModal">
                         <CalendarPlus class="w-4 h-4 mr-2" />
                         Generar Período
                     </Button>
-                    <Button variant="warning" @click="openExtraordinaryModal">
+                    <Button class="w-full sm:w-auto" variant="warning" @click="openExtraordinaryModal">
                         <TrendingUp class="w-4 h-4 mr-2" />
                         Extraordinaria
                     </Button>
 
-                    <Button variant="primary" @click="openPaymentModal">
+                    <Button class="w-full sm:w-auto" variant="primary" @click="openPaymentModal">
                         <Plus class="w-4 h-4 mr-2" />
                         Registrar Pago
                     </Button>
@@ -407,8 +407,8 @@ const paymentMethodOptions = [
 
                 </DataTable>
 
-                <div class="border-t-2 border-slate-300 bg-slate-50 px-4 py-3 -mx-6 -mb-4 mt-4 rounded-b-lg">
-                    <div class="grid grid-cols-8 gap-4 text-sm">
+                <div class="border-t-2 border-slate-300 bg-slate-50 px-4 py-3 -mx-6 -mb-4 mt-4 rounded-b-lg overflow-x-auto">
+                    <div class="grid min-w-[700px] grid-cols-8 gap-4 text-sm">
                         <div class="col-span-2 font-semibold text-slate-700">Totales</div>
                         <div class="text-right font-semibold text-slate-900">{{ formatCurrency(totals.monthly) }}</div>
                         <div class="text-right font-semibold text-amber-600">{{ formatCurrency(totals.extraordinary) }}
@@ -423,7 +423,7 @@ const paymentMethodOptions = [
             </template>
         </Card>
 
-        <div class="mt-6 flex items-center gap-6 text-sm">
+        <div class="mt-6 flex flex-col items-start gap-4 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
             <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
                 <span class="text-slate-600">Pagado - Sin saldo pendiente</span>
@@ -459,7 +459,7 @@ const paymentMethodOptions = [
                         <CreditCard class="w-5 h-5 text-slate-400" />
                         <span class="font-medium text-slate-900">Detalles de la unidad</span>
                     </div>
-                    <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                         <div>
                             <span class="text-slate-500">Propietario:</span>
                             <span class="ml-2 font-medium text-slate-900">{{ selectedUnit.owner }}</span>
@@ -483,13 +483,13 @@ const paymentMethodOptions = [
                 </div>
 
                 <div>
-                    <div class="flex items-end gap-2">
-                        <div class="flex-1">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div class="w-full sm:flex-1">
                             <FormInput v-model="paymentForm.amount" type="number" label="Monto del pago"
                                 placeholder="0.00" :error="paymentForm.errors.amount" min="0" step="0.01" required />
                         </div>
                         <Button v-if="selectedUnit" type="button" variant="secondary" size="sm" @click="fillFullAmount"
-                            class="mb-1">
+                            class="w-full sm:mb-1 sm:w-auto">
                             Monto total
                         </Button>
                     </div>
@@ -516,11 +516,11 @@ const paymentMethodOptions = [
             </form>
 
             <template #footer>
-                <div class="flex items-center justify-end gap-3">
-                    <Button type="button" variant="secondary" @click="closePaymentModal">
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+                    <Button class="w-full sm:w-auto" type="button" variant="secondary" @click="closePaymentModal">
                         Cancelar
                     </Button>
-                    <Button type="button" variant="primary"
+                    <Button class="w-full sm:w-auto" type="button" variant="primary"
                         :disabled="!paymentForm.unit_id || !paymentForm.amount || paymentForm.processing"
                         :loading="paymentForm.processing" @click="submitPayment">
                         <DollarSign class="w-4 h-4 mr-2" />
@@ -573,9 +573,9 @@ const paymentMethodOptions = [
             </form>
 
             <template #footer>
-                <div class="flex justify-end gap-3">
-                    <Button variant="secondary" @click="showGenerateModal = false">Cancelar</Button>
-                    <Button @click="submitGeneration" :loading="generateForm.processing">
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button class="w-full sm:w-auto" variant="secondary" @click="showGenerateModal = false">Cancelar</Button>
+                    <Button class="w-full sm:w-auto" @click="submitGeneration" :loading="generateForm.processing">
                         Confirmar Generación
                     </Button>
                 </div>
@@ -605,9 +605,9 @@ const paymentMethodOptions = [
             </form>
 
             <template #footer>
-                <div class="flex justify-end gap-3">
-                    <Button variant="secondary" @click="closeExtraordinaryModal">Cancelar</Button>
-                    <Button @click="submitExtraordinary" :loading="extraordinaryForm.processing">
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button class="w-full sm:w-auto" variant="secondary" @click="closeExtraordinaryModal">Cancelar</Button>
+                    <Button class="w-full sm:w-auto" @click="submitExtraordinary" :loading="extraordinaryForm.processing">
                         Confirmar Extraordinaria
                     </Button>
                 </div>
@@ -633,9 +633,9 @@ const paymentMethodOptions = [
             </form>
 
             <template #footer>
-                <div class="flex justify-end gap-3">
-                    <Button variant="secondary" @click="closeFineModal">Cancelar</Button>
-                    <Button variant="danger" @click="submitFine" :loading="fineForm.processing"
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button class="w-full sm:w-auto" variant="secondary" @click="closeFineModal">Cancelar</Button>
+                    <Button class="w-full sm:w-auto" variant="danger" @click="submitFine" :loading="fineForm.processing"
                         :disabled="!fineForm.amount || fineForm.processing">
                         Aplicar Multa
                     </Button>
