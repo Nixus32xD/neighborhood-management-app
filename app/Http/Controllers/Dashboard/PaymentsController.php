@@ -265,7 +265,7 @@ class PaymentsController extends Controller
         return response()->view('reports/monthly-reconciliation', [
             'neighborhoodName' => $neighborhood->name,
             'periodLabel' => $periodDate->locale('es')->translatedFormat('F Y'),
-            'generatedAt' => now()->format('d/m/Y H:i'),
+            'generatedAt' => now('America/Argentina/Buenos_Aires')->format('d/m/Y H:i'),
             'expenses' => $expenses,
             'movements' => $movements,
             'totals' => [
@@ -314,3 +314,4 @@ class PaymentsController extends Controller
         //
     }
 }
+
