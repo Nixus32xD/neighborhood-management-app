@@ -24,7 +24,7 @@ class ApplyLateInterestCommand extends Command
         $currentPeriod = $today->format('Y-m');
 
         if (!in_array($day, [10, 15, 20], true)) {
-            $this->error('Invalid day. Use 10 (CC1 monthly), 15 (CC2), or 20 (CC1 extraordinary).');
+            $this->error('Invalid day. Use 10 or 20 (CC1), or 15 (CC2).');
             return self::FAILURE;
         }
 
@@ -49,65 +49,53 @@ class ApplyLateInterestCommand extends Command
 
                     $neighborhoodName = strtoupper(trim((string) data_get($expense, 'unit.neighborhood.name', '')));
 
-                    // CC1: monthly late interest on day 10.
-                    if ($neighborhoodName === 'CC1' && $day === 10) {
-                        if ($this->alreadyAppliedThisMonth($expense->monthly_interest_applied_at, $today)) {
-                            continue;
+                    // CC1: on its penalty windows, apply both monthly and extraordinary if outstanding.
+                    if ($neighborhoodName === 'CC1' && in_array($day, [10, 20], true)) {
+                        if (! $this->alreadyAppliedToday($expense->monthly_interest_applied_at, $today)) {
+                            $monthlyBase = max(0, $monthlyAmount - $paidAmount);
+
+                            if ($monthlyBase > 0) {
+                                $monthlyInterest = round($monthlyBase * $rate, 2);
+
+                                if ($monthlyInterest > 0) {
+                                    $interestLiteral = number_format($monthlyInterest, 2, '.', '');
+
+                                    $updated = UnitExpense::whereKey($expense->id)
+                                        ->update([
+                                            'fines_amount' => DB::raw("fines_amount + {$interestLiteral}"),
+                                            'monthly_interest_applied_at' => $todayString,
+                                        ]);
+
+                                    if ($updated > 0) {
+                                        $affected++;
+                                        $totalInterest += $monthlyInterest;
+                                    }
+                                }
+                            }
                         }
 
-                        $base = max(0, $monthlyAmount - $paidAmount);
-                        if ($base <= 0) {
-                            continue;
-                        }
+                        if (! $this->alreadyAppliedToday($expense->extraordinary_interest_applied_at, $today)) {
+                            $paidAfterMonthly = max(0, $paidAmount - $monthlyAmount);
+                            $extraordinaryBase = max(0, $extraordinaryAmount - $paidAfterMonthly);
 
-                        $interest = round($base * $rate, 2);
-                        if ($interest <= 0) {
-                            continue;
-                        }
+                            if ($extraordinaryBase > 0) {
+                                $extraordinaryInterest = round($extraordinaryBase * $rate, 2);
 
-                        $interestLiteral = number_format($interest, 2, '.', '');
+                                if ($extraordinaryInterest > 0) {
+                                    $interestLiteral = number_format($extraordinaryInterest, 2, '.', '');
 
-                        $updated = UnitExpense::whereKey($expense->id)
-                            ->update([
-                                'fines_amount' => DB::raw("fines_amount + {$interestLiteral}"),
-                                'monthly_interest_applied_at' => $todayString,
-                            ]);
+                                    $updated = UnitExpense::whereKey($expense->id)
+                                        ->update([
+                                            'fines_amount' => DB::raw("fines_amount + {$interestLiteral}"),
+                                            'extraordinary_interest_applied_at' => $todayString,
+                                        ]);
 
-                        if ($updated > 0) {
-                            $affected++;
-                            $totalInterest += $interest;
-                        }
-                    }
-
-                    // CC1: extraordinary late interest on day 20.
-                    if ($neighborhoodName === 'CC1' && $day === 20) {
-                        if ($this->alreadyAppliedThisMonth($expense->extraordinary_interest_applied_at, $today)) {
-                            continue;
-                        }
-
-                        $paidAfterMonthly = max(0, $paidAmount - $monthlyAmount);
-                        $base = max(0, $extraordinaryAmount - $paidAfterMonthly);
-
-                        if ($base <= 0) {
-                            continue;
-                        }
-
-                        $interest = round($base * $rate, 2);
-                        if ($interest <= 0) {
-                            continue;
-                        }
-
-                        $interestLiteral = number_format($interest, 2, '.', '');
-
-                        $updated = UnitExpense::whereKey($expense->id)
-                            ->update([
-                                'fines_amount' => DB::raw("fines_amount + {$interestLiteral}"),
-                                'extraordinary_interest_applied_at' => $todayString,
-                            ]);
-
-                        if ($updated > 0) {
-                            $affected++;
-                            $totalInterest += $interest;
+                                    if ($updated > 0) {
+                                        $affected++;
+                                        $totalInterest += $extraordinaryInterest;
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -193,5 +181,10 @@ class ApplyLateInterestCommand extends Command
     private function alreadyAppliedThisMonth(?Carbon $appliedAt, Carbon $today): bool
     {
         return $appliedAt !== null && $appliedAt->format('Y-m') === $today->format('Y-m');
+    }
+
+    private function alreadyAppliedToday(?Carbon $appliedAt, Carbon $today): bool
+    {
+        return $appliedAt !== null && $appliedAt->isSameDay($today);
     }
 }
