@@ -11,7 +11,8 @@ import {
     Building2,
     Menu,
     X,
-    LandPlot
+    LandPlot,
+    FileSpreadsheet
 } from 'lucide-vue-next'
 import { ref } from 'vue'
 
@@ -41,6 +42,7 @@ const navigation = [
     { name: 'Pagos y Movimientos', href: '/payments', icon: CreditCard },
     { name: 'Metodos de Pago', href: '/payment-methods', icon: Wallet },
     { name: 'Lotes', href: '/lots', icon: LandPlot },
+    { name: 'Estado por Propietario', href: '/owner-statements', icon: FileSpreadsheet },
 ]
 </script>
 

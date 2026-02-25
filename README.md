@@ -1,59 +1,183 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Neighborhood Management App
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistema de administracion para barrios privados/consorcios, desarrollado con Laravel 12 + Inertia + Vue 3.
 
-## About Laravel
+Permite gestionar propietarios, lotes, expensas, pagos, metodos de cobro, egresos y reportes contables, incluyendo estado individual por propietario con filtro por periodo o por rango de fechas e impresion.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- Backend: PHP 8.2+, Laravel 12
+- Frontend: Vue 3, Inertia.js, Vite, Tailwind CSS
+- DB: MySQL (configurable)
+- Auth: Laravel Breeze
+- Iconos: lucide-vue-next
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Funcionalidades principales
 
-## Learning Laravel
+- Seleccion de barrio activo por sesion.
+- Gestion de lotes (UF), propietarios y residentes.
+- Generacion masiva de expensas:
+  - CC1: monto fijo por unidad.
+  - CC2: reparto proporcional por coeficiente/superficie.
+- Registro de pagos de expensas e imputacion por periodo.
+- Carga de extraordinarias y multas manuales.
+- Aplicacion automatica de interes por mora (comando programado).
+- Gestion de egresos y movimientos bancarios.
+- Rendicion mensual imprimible.
+- Nuevo: estado individual por propietario:
+  - filtro por periodo (`Y-m`) o rango de fechas (`Y-m-d`),
+  - resumen de cargos/pagos/saldo,
+  - impresion en formato reporte.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Estructura funcional (resumen)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- `app/Http/Controllers/Dashboard`
+  - `ExpensesController.php`
+  - `PaymentsController.php`
+  - `OwnerStatementController.php` (nuevo)
+- `app/Services/ExpenseGeneratorService.php`
+- `app/Console/Commands/ApplyLateInterestCommand.php`
+- `resources/js/Pages`
+  - `Expenses/Index.vue`
+  - `Payments/Index.vue`
+  - `Reports/OwnerStatements.vue` (nuevo)
+- `resources/views/reports`
+  - `monthly-reconciliation.blade.php`
+  - `owner-statement.blade.php` (nuevo)
+- `routes/web.php`
+- `routes/console.php`
 
-## Laravel Sponsors
+## Requisitos
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- PHP 8.2+
+- Composer
+- Node.js 18+
+- npm
+- MySQL 8+ (o compatible)
 
-### Premium Partners
+## Instalacion local
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+1. Clonar el proyecto.
+2. Instalar dependencias backend:
+   - `composer install`
+3. Crear entorno:
+   - `copy .env.example .env` (Windows) o `cp .env.example .env`
+4. Configurar `.env` (DB, APP_URL, etc.).
+5. Generar key:
+   - `php artisan key:generate`
+6. Ejecutar migraciones:
+   - `php artisan migrate`
+7. (Opcional) Seed inicial:
+   - `php artisan db:seed`
+8. Instalar frontend:
+   - `npm install`
+9. Desarrollo:
+   - `composer run dev`
+   - o en terminales separadas:
+   - `php artisan serve`
+   - `npm run dev`
 
-## Contributing
+## Configuracion relevante
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- Zona horaria app:
+  - `.env` -> `APP_TIMEZONE=America/Argentina/Buenos_Aires`
+- Tasa base de mora CC2:
+  - `.env` -> `CC2_CONSTRUCTION_INDEX_RATE=0.03`
+  - `config/fines.php`
 
-## Code of Conduct
+## Tareas programadas (mora)
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Definidas en `routes/console.php`:
 
-## Security Vulnerabilities
+- Dia 11, 00:00: aplica mora dia 10 (CC1)
+- Dia 16, 00:00: aplica mora dia 15 (CC2)
+- Dia 21, 00:00: aplica mora dia 20 (CC1)
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Para que corra en produccion, configurar scheduler:
 
-## License
+- `php artisan schedule:run` cada minuto (cron del servidor/plataforma).
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Estado individual por propietario (nuevo)
+
+Menu: `Estado por Propietario`
+
+Ruta:
+
+- `GET /owner-statements`
+- `GET /owner-statements/print`
+
+Permite:
+
+- Seleccionar propietario.
+- Filtrar:
+  - Por periodo (`period_from` a `period_to`).
+  - Por rango de fechas (`date_from` a `date_to`).
+- Ver:
+  - cargos por periodo (mensual, extraordinaria, multas),
+  - pagos imputados,
+  - saldo pendiente.
+- Imprimir reporte en nueva pestaña.
+
+## Comandos utiles
+
+- Ejecutar tests:
+  - `php artisan test`
+- Limpiar caches:
+  - `php artisan optimize:clear`
+- Ver rutas:
+  - `php artisan route:list`
+- Aplicar mora manual (ejemplo):
+  - `php artisan expenses:apply-late-interest --day=15 --period=2026-02`
+
+## Build para produccion
+
+- `npm run build`
+- `php artisan config:cache`
+- `php artisan route:cache`
+- `php artisan view:cache`
+
+## Storage y archivos (vouchers/comprobantes)
+
+El sistema utiliza el disco `public` para archivos como comprobantes:
+
+- subida: `storage/app/public/...`
+- URL publica: `/storage/...`
+
+### Entorno local
+
+Crear enlace simbolico:
+
+- `php artisan storage:link`
+
+Esto crea `public/storage` apuntando a `storage/app/public`.
+
+### Laravel Cloud
+
+En Laravel Cloud no conviene depender de `storage:link` en disco local efimero para archivos persistentes.
+
+Recomendado:
+
+1. Usar almacenamiento externo (S3 compatible) para persistencia real.
+2. Configurar en `.env`:
+   - `FILESYSTEM_DISK=s3`
+   - `AWS_ACCESS_KEY_ID=...`
+   - `AWS_SECRET_ACCESS_KEY=...`
+   - `AWS_DEFAULT_REGION=...`
+   - `AWS_BUCKET=...`
+3. Ejecutar deploy.
+
+Si temporalmente usas disco local dentro del contenedor, debes asegurar:
+
+- que `php artisan storage:link` se ejecute en build/release hook,
+- y entender que al recrear instancias podrias perder archivos locales.
+
+## Seguridad y buenas practicas
+
+- No commitear `.env` ni credenciales.
+- Validar tamano/tipo de archivos de comprobantes.
+- Restringir acceso por `neighborhood_id` (ya aplicado en controladores clave).
+- Auditar periodicamente permisos y datos sensibles.
+
+## Licencia
+
+Proyecto interno. Ajustar licencia segun politica del equipo/cliente.

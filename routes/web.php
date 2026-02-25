@@ -4,6 +4,7 @@ use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\ExpensesController;
 use App\Http\Controllers\Dashboard\LotsController;
 use App\Http\Controllers\Dashboard\OwnerController;
+use App\Http\Controllers\Dashboard\OwnerStatementController;
 use App\Http\Controllers\Dashboard\PaymentsController;
 use App\Http\Controllers\Dashboard\PaymentsMethodsController;
 use App\Http\Controllers\ProfileController;
@@ -55,6 +56,13 @@ Route::middleware(['auth'])->group(function () {
 });
 Route::middleware(['auth'])->group(function () {
     Route::resource('lots', LotsController::class);
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/owner-statements', [OwnerStatementController::class, 'index'])
+        ->name('owner-statements.index');
+    Route::get('/owner-statements/print', [OwnerStatementController::class, 'print'])
+        ->name('owner-statements.print');
 });
 
 Route::middleware(['auth'])->group(function () {
