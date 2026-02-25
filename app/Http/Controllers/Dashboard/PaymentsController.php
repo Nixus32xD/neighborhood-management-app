@@ -149,7 +149,7 @@ class PaymentsController extends Controller
 
         if ($request->hasFile('voucher')) {
             $voucherPath = $request->file('voucher')
-                ->store('vouchers', 'public');
+                ->store('vouchers');
         }
 
         Payment::create([
@@ -173,7 +173,23 @@ class PaymentsController extends Controller
     {
         abort_unless($payment->voucher_path, 404);
 
-        return Storage::disk('public')->response($payment->voucher_path);
+        [$diskName, $disk] = $this->resolveVoucherDisk($payment->voucher_path);
+        abort_unless($disk !== null, 404);
+
+        try {
+            if (method_exists($disk, 'temporaryUrl')) {
+                $temporaryUrl = $disk->temporaryUrl(
+                    $payment->voucher_path,
+                    now()->addMinutes(10)
+                );
+
+                return redirect()->away($temporaryUrl);
+            }
+        } catch (\Throwable) {
+            // If the disk does not support temporary URLs, fall back to streamed response.
+        }
+
+        return $disk->response($payment->voucher_path);
     }
 
     public function updateOpeningBalance(Request $request, BankAccount $bankAccount)
@@ -312,6 +328,23 @@ class PaymentsController extends Controller
     public function destroy(string $id)
     {
         //
+    }
+
+    private function resolveVoucherDisk(string $path): array
+    {
+        $candidates = [
+            (string) config('filesystems.default', 'local'),
+            'public',
+        ];
+
+        foreach (array_unique($candidates) as $diskName) {
+            $disk = Storage::disk($diskName);
+            if ($disk->exists($path)) {
+                return [$diskName, $disk];
+            }
+        }
+
+        return [null, null];
     }
 }
 

@@ -32,9 +32,34 @@ class Payment extends Model
 
     public function getVoucherUrlAttribute()
     {
-        return $this->voucher_path
-            ? Storage::url($this->voucher_path)
-            : null;
+        if (! $this->voucher_path) {
+            return null;
+        }
+
+        $candidates = [
+            (string) config('filesystems.default', 'local'),
+            'public',
+        ];
+
+        foreach (array_unique($candidates) as $diskName) {
+            $disk = Storage::disk($diskName);
+
+            if (! $disk->exists($this->voucher_path)) {
+                continue;
+            }
+
+            try {
+                if (method_exists($disk, 'temporaryUrl')) {
+                    return $disk->temporaryUrl($this->voucher_path, now()->addMinutes(10));
+                }
+            } catch (\Throwable) {
+                // Ignore and use regular URL below.
+            }
+
+            return $disk->url($this->voucher_path);
+        }
+
+        return null;
     }
 
     public function neighborhood()
