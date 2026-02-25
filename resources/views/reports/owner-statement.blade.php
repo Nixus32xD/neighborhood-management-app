@@ -143,7 +143,6 @@
                 <th>Fecha</th>
                 <th>Periodo imputado</th>
                 <th>Metodo</th>
-                <th>Referencia</th>
                 <th class="text-right">Monto</th>
             </tr>
         </thead>
@@ -153,12 +152,11 @@
                     <td>{{ $payment['date'] ? \Carbon\Carbon::parse($payment['date'])->format('d/m/Y') : '-' }}</td>
                     <td>{{ $payment['period'] ?: '-' }}</td>
                     <td>{{ $payment['method'] ?: '-' }}</td>
-                    <td>{{ $payment['reference'] ?: '-' }}</td>
                     <td class="text-right">${{ number_format($payment['amount'], 2, ',', '.') }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5">No hay pagos para el filtro aplicado.</td>
+                    <td colspan="4">No hay pagos para el filtro aplicado.</td>
                 </tr>
             @endforelse
         </tbody>

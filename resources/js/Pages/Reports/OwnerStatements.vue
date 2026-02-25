@@ -153,7 +153,6 @@ const printStatement = () => {
                                 <th class="px-4 py-3 text-left">Fecha</th>
                                 <th class="px-4 py-3 text-left">Periodo imputado</th>
                                 <th class="px-4 py-3 text-left">Metodo</th>
-                                <th class="px-4 py-3 text-left">Referencia</th>
                                 <th class="px-4 py-3 text-right">Monto</th>
                             </tr>
                         </thead>
@@ -161,12 +160,11 @@ const printStatement = () => {
                             <tr v-for="(payment, index) in statement.payments" :key="`${payment.date}-${index}`">
                                 <td class="px-4 py-3">{{ payment.date }}</td>
                                 <td class="px-4 py-3">{{ payment.period || '-' }}</td>
-                                <td class="px-4 py-3">{{ payment.method }}</td>
-                                <td class="px-4 py-3">{{ payment.reference || '-' }}</td>
+                                <td class="px-4 py-3">{{ payment.method || '-' }}</td>
                                 <td class="px-4 py-3 text-right font-medium">{{ formatCurrency(payment.amount) }}</td>
                             </tr>
                             <tr v-if="!statement.payments.length">
-                                <td colspan="5" class="px-4 py-6 text-center text-slate-500">
+                                <td colspan="4" class="px-4 py-6 text-center text-slate-500">
                                     No hay pagos en el filtro aplicado.
                                 </td>
                             </tr>

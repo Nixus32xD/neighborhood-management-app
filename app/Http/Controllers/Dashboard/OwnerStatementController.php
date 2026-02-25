@@ -20,8 +20,8 @@ class OwnerStatementController extends Controller
         $owners = Owner::query()
             ->with('unit:id,uf_number')
             ->whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
-            ->orderBy('full_name')
             ->get()
+            ->sortBy(fn($owner) => (int) ($owner->unit->uf_number ?? 0), SORT_NATURAL)
             ->map(fn($owner) => [
                 'id' => $owner->id,
                 'name' => $owner->full_name,
@@ -173,8 +173,7 @@ class OwnerStatementController extends Controller
             ->map(fn($payment) => [
                 'date' => $payment->payment_date?->format('Y-m-d'),
                 'period' => $payment->unitExpense?->period,
-                'method' => $payment->payment_method,
-                'reference' => $payment->reference,
+                'method' => $this->paymentMethodLabel((string) $payment->payment_method),
                 'amount' => (float) $payment->amount,
             ])
             ->values();
@@ -200,5 +199,16 @@ class OwnerStatementController extends Controller
                 'outstanding_total' => (float) $rows->sum('outstanding'),
             ],
         ];
+    }
+
+    private function paymentMethodLabel(string $method): string
+    {
+        return match (strtolower(trim($method))) {
+            'cash' => 'Efectivo',
+            'bank_transfer' => 'Transferencia bancaria',
+            'check' => 'Cheque',
+            'other' => 'Otro',
+            default => $method !== '' ? $method : '-',
+        };
     }
 }
