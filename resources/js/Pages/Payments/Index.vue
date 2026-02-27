@@ -196,8 +196,8 @@ const typeFilter = ref('all')
 
 const amountOptions = [
     { value: 'all', label: 'Todos los montos' },
-    { value: 'high', label: 'Alto Valor (>$10,000)' },
-    { value: 'low', label: 'Bajo Valor (<$10,000)' }
+    { value: 'high', label: 'Alto Valor (>$50,000)' },
+    { value: 'low', label: 'Bajo Valor (<$50,000)' }
 ]
 
 const typeOptions = [
@@ -213,8 +213,8 @@ const filteredMovements = computed(() => {
         if (dateTo.value && m.date > dateTo.value) return false
 
         // Amount filter
-        if (amountFilter.value === 'high' && m.amount <= 10000) return false
-        if (amountFilter.value === 'low' && m.amount > 10000) return false
+        if (amountFilter.value === 'high' && m.amount <= 50000) return false
+        if (amountFilter.value === 'low' && m.amount > 50000) return false
 
         // Type filter
         if (typeFilter.value !== 'all' && m.payment_method !== typeFilter.value) return false
