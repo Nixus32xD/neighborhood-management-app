@@ -124,6 +124,7 @@ const submitOpeningBalance = () => {
     openingBalanceForm.put(
         route('payments.bank-accounts.opening-balance', selectedAccount.value.id),
         {
+            preserveState: false,
             onSuccess: () => {
                 showOpeningBalanceModal.value = false
                 selectedAccount.value = null
