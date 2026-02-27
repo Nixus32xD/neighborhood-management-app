@@ -163,7 +163,7 @@ class PaymentsController extends Controller
                 ? null
                 : $data['bank_account'],
             'voucher_path' => $voucherPath,
-            'is_high_value' => $data['amount'] > 10000,
+            'is_high_value' => $data['amount'] > 50000,
         ]);
 
         return redirect()->back()->with('success', 'Pago Registrado Correctamente');
@@ -392,4 +392,5 @@ class PaymentsController extends Controller
         return [null, null];
     }
 }
+
 

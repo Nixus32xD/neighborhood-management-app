@@ -515,7 +515,7 @@ const handleDrop = (e) => {
                     <DollarSign class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
                         <p class="font-medium text-amber-800">Transacción de Alto Valor</p>
-                        <p class="text-sm text-amber-700">Esta transacción supera los $10,000 y requiere atención de
+                        <p class="text-sm text-amber-700">Esta transacción supera los $50,000 y requiere atención de
                             auditoría
                             adicional.</p>
                     </div>
@@ -633,3 +633,4 @@ const handleDrop = (e) => {
 
     </DashboardLayout>
 </template>
+

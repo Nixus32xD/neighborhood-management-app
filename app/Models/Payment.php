@@ -27,7 +27,7 @@ class Payment extends Model
     /* Helpers */
     public function getIsHighValueAttribute()
     {
-        return $this->amount > 10000;
+        return $this->amount > 50000;
     }
 
     public function getVoucherUrlAttribute()
@@ -72,3 +72,4 @@ class Payment extends Model
         return $this->belongsTo(BankAccount::class);
     }
 }
+
