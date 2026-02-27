@@ -37,12 +37,12 @@ const selectedNeighborhood = computed(() =>
 
 const navigation = [
     { name: 'Panel', href: '/dashboard', icon: Home },
-    { name: 'Dueños / Propietarios', href: '/owners', icon: Users },
-    { name: 'Expensas & Honorarios', href: '/expenses', icon: DollarSign },
+    { name: 'Expensas y Honorarios', href: '/expenses', icon: DollarSign },
     { name: 'Pagos y Movimientos', href: '/payments', icon: CreditCard },
-    { name: 'Metodos de Pago', href: '/payment-methods', icon: Wallet },
+    { name: 'Estado de Cuenta', href: '/owner-statements', icon: FileSpreadsheet },
+    { name: 'Propietarios', href: '/owners', icon: Users },
     { name: 'Lotes', href: '/lots', icon: LandPlot },
-    { name: 'Estado por Propietario', href: '/owner-statements', icon: FileSpreadsheet },
+    { name: 'Metodos de Cobro', href: '/payment-methods', icon: Wallet },
 ]
 </script>
 
@@ -129,3 +129,5 @@ const navigation = [
         </div>
     </div>
 </template>
+
+

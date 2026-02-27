@@ -65,9 +65,9 @@ class UnitExpense extends Model
             return 'paid';
         }
 
-        return $this->period === now()->format('Y-m')
-            ? 'pending'
-            : 'overdue';
+        return $this->period < now()->format('Y-m')
+            ? 'overdue'
+            : 'pending';
     }
 
     public function payments()

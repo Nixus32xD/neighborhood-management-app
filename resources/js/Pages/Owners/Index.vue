@@ -19,10 +19,10 @@ const props = defineProps({
 })
 
 const columns = [
-    { key: 'uf_number', label: 'UF Number' },
-    { key: 'name', label: 'Owner Name' },
-    { key: 'email', label: 'Email' },
-    { key: 'residents', label: 'Residents' }
+    { key: 'uf_number', label: 'UF' },
+    { key: 'name', label: 'Nombre del propietario' },
+    { key: 'email', label: 'Correo Electrónico' },
+    { key: 'residents', label: 'Residentes' }
 ]
 
 // Modal states

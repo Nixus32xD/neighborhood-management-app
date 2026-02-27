@@ -251,6 +251,48 @@ class PaymentsController extends Controller
             })
             ->values();
 
+        $debtByOwner = UnitExpense::with(['unit.owners', 'payments'])
+            ->where('period', '<=', $period)
+            ->whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
+            ->get()
+            ->groupBy('unit_id')
+            ->map(function ($unitExpenses) use ($period) {
+                $first = $unitExpenses->first();
+                $owner = $first?->unit?->owners?->pluck('full_name')->join(', ') ?: '-';
+                $uf = $first?->unit?->uf_number;
+
+                $historicalOutstanding = 0.0;
+                $currentOutstanding = 0.0;
+                $totalOutstanding = 0.0;
+
+                foreach ($unitExpenses as $expense) {
+                    $charged = (float) $expense->monthly_amount
+                        + (float) $expense->extraordinary_amount
+                        + (float) $expense->fines_amount;
+                    $paid = (float) $expense->payments->sum('amount');
+                    $outstanding = max(0, $charged - $paid);
+
+                    $totalOutstanding += $outstanding;
+                    if ($expense->period < $period) {
+                        $historicalOutstanding += $outstanding;
+                    }
+                    if ($expense->period === $period) {
+                        $currentOutstanding += $outstanding;
+                    }
+                }
+
+                return [
+                    'uf_number' => 'UF-' . $uf,
+                    'owner' => $owner,
+                    'historical_outstanding' => (float) $historicalOutstanding,
+                    'current_outstanding' => (float) $currentOutstanding,
+                    'total_outstanding' => (float) $totalOutstanding,
+                ];
+            })
+            ->filter(fn($row) => $row['total_outstanding'] > 0)
+            ->sortBy(fn($row) => (int) str_replace('UF-', '', (string) $row['uf_number']))
+            ->values();
+
         $movements = Payment::with('bankAccount')
             ->where('neighborhood_id', $neighborhoodId)
             ->whereDate('date', '>=', $start->toDateString())
@@ -283,6 +325,7 @@ class PaymentsController extends Controller
             'periodLabel' => $periodDate->locale('es')->translatedFormat('F Y'),
             'generatedAt' => now('America/Argentina/Buenos_Aires')->format('d/m/Y H:i'),
             'expenses' => $expenses,
+            'debtByOwner' => $debtByOwner,
             'movements' => $movements,
             'totals' => [
                 'monthly' => (float) $expenses->sum('monthly'),
@@ -291,6 +334,8 @@ class PaymentsController extends Controller
                 'charged' => (float) $expenses->sum('total'),
                 'collected' => (float) $expenses->sum('paid'),
                 'outstanding' => (float) $expenses->sum('outstanding'),
+                'historical_outstanding' => (float) $debtByOwner->sum('historical_outstanding'),
+                'cumulative_outstanding' => (float) $debtByOwner->sum('total_outstanding'),
                 'income' => (float) $income,
                 'outflow' => (float) $outflow,
                 'net' => (float) ($income - $outflow),

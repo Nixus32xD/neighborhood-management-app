@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Neighborhood;
 use App\Models\UnitExpense;
 use App\Services\ExpenseGeneratorService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -25,7 +26,6 @@ class ExpensesController extends Controller
 
 
         $rows = UnitExpense::with(['unit', 'unit.owners', 'payments'])
-            ->where('period', '<=', now()->format('Y-m')) // 👈 clave
             ->whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
             ->get()
 
@@ -54,11 +54,11 @@ class ExpensesController extends Controller
                     'total_balance' => $total,
                     'status' => $outstanding === 0
                         ? 'paid'
-                        : ($e->period === now()->format('Y-m') ? 'pending' : 'overdue'),
+                        : ($e->period < now()->format('Y-m') ? 'overdue' : 'pending'),
                 ];
             })->values();
 
-
+        // dd(Carbon::now()->format('Y-m-d H:i:s'));
         return Inertia::render('Expenses/Index', [
             'expenses' => $rows,
             'summary' => [

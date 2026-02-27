@@ -93,6 +93,14 @@
             <div class="value">${{ number_format($totals['outstanding'], 2, ',', '.') }}</div>
         </div>
         <div class="card">
+            <div class="muted">Deuda anterior acumulada</div>
+            <div class="value">${{ number_format($totals['historical_outstanding'], 2, ',', '.') }}</div>
+        </div>
+        <div class="card">
+            <div class="muted">Deuda total acumulada</div>
+            <div class="value">${{ number_format($totals['cumulative_outstanding'], 2, ',', '.') }}</div>
+        </div>
+        <div class="card">
             <div class="muted">Ingresos del mes</div>
             <div class="value">${{ number_format($totals['income'], 2, ',', '.') }}</div>
         </div>
@@ -142,6 +150,34 @@
         </tbody>
     </table>
 
+    <h2 class="section-title">Deudas acumuladas por propietario</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>UF</th>
+                <th>Propietario</th>
+                <th class="text-right">Deuda anterior</th>
+                <th class="text-right">Pendiente del periodo</th>
+                <th class="text-right">Total adeudado</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse ($debtByOwner as $debt)
+                <tr>
+                    <td>{{ $debt['uf_number'] }}</td>
+                    <td>{{ $debt['owner'] ?: '-' }}</td>
+                    <td class="text-right">${{ number_format($debt['historical_outstanding'], 2, ',', '.') }}</td>
+                    <td class="text-right">${{ number_format($debt['current_outstanding'], 2, ',', '.') }}</td>
+                    <td class="text-right">${{ number_format($debt['total_outstanding'], 2, ',', '.') }}</td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="5">No hay deuda acumulada al cierre del periodo.</td>
+                </tr>
+            @endforelse
+        </tbody>
+    </table>
+
     <h2 class="section-title">Movimientos bancarios del mes</h2>
     <table>
         <thead>
@@ -174,4 +210,3 @@
 </body>
 
 </html>
-
