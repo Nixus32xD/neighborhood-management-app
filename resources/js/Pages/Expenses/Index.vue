@@ -45,6 +45,7 @@ const statusOptions = [
 ]
 
 const periodFilter = ref('')
+const periodFilterInitialized = ref(false)
 const periodOptions = computed(() => {
     const periods = [...new Set(
         props.expenses
@@ -179,10 +180,18 @@ watch(
         if (!expenses.length) return
 
         const currentPeriod = getCurrentPeriod()
+        const availablePeriods = new Set(expenses.map(e => e.period).filter(Boolean))
 
-        const exists = expenses.some(e => e.period === currentPeriod)
+        if (!periodFilterInitialized.value) {
+            const exists = availablePeriods.has(currentPeriod)
+            periodFilter.value = exists ? currentPeriod : 'all'
+            periodFilterInitialized.value = true
+            return
+        }
 
-        periodFilter.value = exists ? currentPeriod : 'all'
+        if (periodFilter.value && periodFilter.value !== 'all' && !availablePeriods.has(periodFilter.value)) {
+            periodFilter.value = availablePeriods.has(currentPeriod) ? currentPeriod : 'all'
+        }
     },
     { immediate: true }
 )
