@@ -8,17 +8,24 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            color: #1f2937;
+            color: #111827;
             font-size: 12px;
             margin: 20px;
+            background: #f8fafc;
         }
 
-        h1, h2, h3 {
+        h1,
+        h2,
+        h3 {
             margin: 0;
         }
 
         .header {
             margin-bottom: 16px;
+            border: 1px solid #dbeafe;
+            background: linear-gradient(135deg, #eff6ff, #f0f9ff);
+            border-radius: 10px;
+            padding: 12px;
         }
 
         .muted {
@@ -36,6 +43,7 @@
             border: 1px solid #d1d5db;
             border-radius: 8px;
             padding: 10px;
+            background: #ffffff;
         }
 
         .value {
@@ -44,21 +52,63 @@
             margin-top: 4px;
         }
 
+        .card-blue {
+            border-color: #bfdbfe;
+            background: #eff6ff;
+        }
+
+        .card-green {
+            border-color: #bbf7d0;
+            background: #f0fdf4;
+        }
+
+        .card-red {
+            border-color: #fecaca;
+            background: #fef2f2;
+        }
+
+        .card-amber {
+            border-color: #fde68a;
+            background: #fffbeb;
+        }
+
+        .card-violet {
+            border-color: #ddd6fe;
+            background: #f5f3ff;
+        }
+
+        .card-cyan {
+            border-color: #a5f3fc;
+            background: #ecfeff;
+        }
+
+        .card-slate {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 18px;
+            background: #ffffff;
         }
 
-        th, td {
+        th,
+        td {
             border: 1px solid #d1d5db;
             padding: 6px 8px;
             text-align: left;
         }
 
         th {
-            background: #f3f4f6;
+            background: #e2e8f0;
             font-weight: 700;
+            color: #0f172a;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #f8fafc;
         }
 
         .text-right {
@@ -68,6 +118,87 @@
         .section-title {
             margin: 14px 0 8px;
             font-size: 14px;
+            color: #1d4ed8;
+        }
+
+        .status-pill {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+        }
+
+        .status-paid {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .th-monthly {
+            background: #dbeafe;
+            color: #1e3a8a;
+        }
+
+        .th-extra {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .amount-monthly {
+            background: #eff6ff;
+            color: #1e40af;
+            font-weight: 700;
+        }
+
+        .amount-extra-has {
+            background: #fff7ed;
+            color: #c2410c;
+            font-weight: 700;
+        }
+
+        .amount-extra-none {
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .th-fines {
+            background: #fce7f3;
+            color: #9d174d;
+        }
+
+        .th-paid {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .th-outstanding {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .amount-fines {
+            background: #fdf2f8;
+            color: #be185d;
+            font-weight: 700;
+        }
+
+        .amount-paid {
+            background: #f0fdf4;
+            color: #166534;
+            font-weight: 700;
+        }
+
+        .amount-outstanding {
+            background: #fffbeb;
+            color: #92400e;
+            font-weight: 700;
         }
     </style>
 </head>
@@ -78,69 +209,82 @@
         <p class="muted">{{ $neighborhoodName }} - {{ ucfirst($periodLabel) }}</p>
         <p class="muted">Generado: {{ $generatedAt }}</p>
     </div>
-
+{{--
     <div class="grid">
-        <div class="card">
+        <div class="card card-blue">
             <div class="muted">Expensas del mes</div>
             <div class="value">${{ number_format($totals['charged'], 2, ',', '.') }}</div>
         </div>
-        <div class="card">
+        <div class="card card-green">
             <div class="muted">Cobrado a propietarios</div>
             <div class="value">${{ number_format($totals['collected'], 2, ',', '.') }}</div>
         </div>
-        <div class="card">
+        <div class="card card-red">
             <div class="muted">Saldo pendiente</div>
             <div class="value">${{ number_format($totals['outstanding'], 2, ',', '.') }}</div>
         </div>
-        <div class="card">
+        <div class="card card-amber">
             <div class="muted">Deuda anterior acumulada</div>
             <div class="value">${{ number_format($totals['historical_outstanding'], 2, ',', '.') }}</div>
         </div>
-        <div class="card">
+        <div class="card card-violet">
             <div class="muted">Deuda total acumulada</div>
             <div class="value">${{ number_format($totals['cumulative_outstanding'], 2, ',', '.') }}</div>
         </div>
-        <div class="card">
+        <div class="card card-cyan">
             <div class="muted">Ingresos del mes</div>
             <div class="value">${{ number_format($totals['income'], 2, ',', '.') }}</div>
         </div>
-        <div class="card">
+        <div class="card card-slate">
             <div class="muted">Egresos del mes</div>
             <div class="value">${{ number_format($totals['outflow'], 2, ',', '.') }}</div>
         </div>
-        <div class="card">
+        <div class="card {{ $totals['net'] >= 0 ? 'card-green' : 'card-red' }}">
             <div class="muted">Resultado neto</div>
             <div class="value">${{ number_format($totals['net'], 2, ',', '.') }}</div>
         </div>
-    </div>
+    </div> --}}
 
     <h2 class="section-title">Estado de expensas por propietario</h2>
     <table>
         <thead>
             <tr>
-                <th>UF</th>
-                <th>Propietario</th>
-                <th class="text-right">Mensual</th>
-                <th class="text-right">Extraordinaria</th>
-                <th class="text-right">Multas</th>
+                <th class="th-monthly">UF</th>
+                <th class="th-monthly">Propietario</th>
+                <th class="text-right th-monthly">Mensual (a pagar)</th>
+                <?php if($totals['extraordinary'] > 0): ?>
+                <th class="text-right th-extra">Extraordinaria</th>
+                <?php endif; ?>
+                <th class="text-right th-fines">Multas</th>
                 <th class="text-right">Total</th>
-                <th class="text-right">Pagado</th>
-                <th class="text-right">Pendiente</th>
+                <th class="text-right th-paid">Pagado</th>
+                <th class="text-right th-outstanding">Pendiente</th>
                 <th>Estado</th>
             </tr>
         </thead>
         <tbody>
             @forelse ($expenses as $expense)
                 <tr>
-                    <td>{{ $expense['uf_number'] }}</td>
-                    <td>{{ $expense['owner'] ?: '-' }}</td>
-                    <td class="text-right">${{ number_format($expense['monthly'], 2, ',', '.') }}</td>
-                    <td class="text-right">${{ number_format($expense['extraordinary'], 2, ',', '.') }}</td>
-                    <td class="text-right">${{ number_format($expense['fines'], 2, ',', '.') }}</td>
+                    <td class="amount-monthly">{{ $expense['uf_number'] }}</td>
+                    <td class="amount-monthly">{{ $expense['owner'] ?: '-' }}</td>
+                    <td class="text-right amount-monthly">${{ number_format($expense['monthly'], 2, ',', '.') }}</td>
+                    <?php if($totals['extraordinary'] > 0): ?>
+                    <td
+                        class="text-right {{ (float) $expense['extraordinary'] > 0 ? 'amount-extra-has' : 'amount-extra-none' }}">
+                        ${{ number_format($expense['extraordinary'], 2, ',', '.') }}
+                    </td>
+                    <?php endif; ?>
+                    <td class="text-right amount-fines">${{ number_format($expense['fines'], 2, ',', '.') }}</td>
                     <td class="text-right">${{ number_format($expense['total'], 2, ',', '.') }}</td>
-                    <td class="text-right">${{ number_format($expense['paid'], 2, ',', '.') }}</td>
-                    <td class="text-right">${{ number_format($expense['outstanding'], 2, ',', '.') }}</td>
-                    <td>{{ $expense['status'] }}</td>
+                    <td class="text-right amount-paid">${{ number_format($expense['paid'], 2, ',', '.') }}</td>
+                    <td class="text-right amount-outstanding">
+                        ${{ number_format($expense['outstanding'], 2, ',', '.') }}</td>
+                    <td>
+                        <span
+                            class="status-pill {{ strtolower($expense['status']) === 'pagado' ? 'status-paid' : 'status-pending' }}">
+                            {{ $expense['status'] }}
+                        </span>
+                    </td>
                 </tr>
             @empty
                 <tr>
@@ -150,7 +294,7 @@
         </tbody>
     </table>
 
-    <h2 class="section-title">Deudas acumuladas por propietario</h2>
+    {{-- <h2 class="section-title">Deudas acumuladas por propietario</h2>
     <table>
         <thead>
             <tr>
@@ -176,7 +320,7 @@
                 </tr>
             @endforelse
         </tbody>
-    </table>
+    </table> --}}
 
     <h2 class="section-title">Movimientos bancarios del mes</h2>
     <table>
