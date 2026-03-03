@@ -239,6 +239,10 @@
             <div class="muted">Egresos del mes</div>
             <div class="value">${{ number_format($totals['outflow'], 2, ',', '.') }}</div>
         </div>
+        <div class="card card-violet">
+            <div class="muted">Egresos netos (con impuestos)</div>
+            <div class="value">${{ number_format($totals['outflow_with_taxes'], 2, ',', '.') }}</div>
+        </div>
         <div class="card {{ $totals['net'] >= 0 ? 'card-green' : 'card-red' }}">
             <div class="muted">Resultado neto</div>
             <div class="value">${{ number_format($totals['net'], 2, ',', '.') }}</div>
@@ -342,7 +346,7 @@
                     <td>{{ $movement['recipient'] }}</td>
                     <td>{{ $movement['method'] }}</td>
                     <td>{{ $movement['account'] }}</td>
-                    <td class="text-right">${{ number_format($movement['amount'], 2, ',', '.') }}</td>
+                    <td class="text-right">${{ number_format($movement['accounting_total'], 2, ',', '.') }}</td>
                 </tr>
             @empty
                 <tr>

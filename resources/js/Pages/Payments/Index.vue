@@ -41,6 +41,11 @@ const props = defineProps({
             totalOutflow: 0,
             monthlyOutflow: 0,
             monthlyIncome: 0,
+            totalDebitTaxes: 0,
+            totalCreditTaxes: 0,
+            monthlyDebitTaxes: 0,
+            monthlyCreditTaxes: 0,
+            monthlyOutflowWithTaxes: 0,
             openingBalanceTotal: 0,
             currentBalanceTotal: 0,
             estimatedBalance: 0
@@ -69,6 +74,10 @@ const selectedMovement = ref(null)
 const form = useForm({
     date: '',
     amount: '',
+    is_tax: false,
+    tax_type: 'debit',
+    tax_debit: 0,
+    tax_credit: 0,
     description: '',
     recipient: '',
     payment_method: '',
@@ -80,6 +89,11 @@ const paymentMethodOptions = [
     { value: 'Bank Transfer', label: 'Transferencia Bancaria' },
     { value: 'Cash', label: 'Efectivo' },
     { value: 'Check', label: 'Cheque' }
+]
+
+const taxTypeOptions = [
+    { value: 'debit', label: 'Debito' },
+    { value: 'credit', label: 'Credito' }
 ]
 
 const showVoucherModal = ref(false)
@@ -94,8 +108,7 @@ const openingBalanceForm = useForm({
 })
 
 const isPdf = computed(() => {
-    if (!selectedMovement.value?.voucher_url) return false
-    return selectedMovement.value.voucher_url.toLowerCase().endsWith('.pdf')
+    return selectedMovement.value?.voucher_extension === 'pdf'
 })
 
 // En tu <script setup>
@@ -137,6 +150,10 @@ const submitOpeningBalance = () => {
 const openCreateModal = () => {
     form.reset()
     form.clearErrors()
+    form.is_tax = false
+    form.tax_type = 'debit'
+    form.tax_debit = 0
+    form.tax_credit = 0
     showCreateModal.value = true
 }
 
@@ -146,6 +163,10 @@ const openDetailModal = (movement) => {
 }
 
 const submitCreate = () => {
+    if (form.is_tax) {
+        form.description = form.tax_type === 'debit' ? 'Impuesto débito' : 'Impuesto crédito'
+        form.recipient = 'AFIP / Entes fiscales'
+    }
     form.post('/payments', {
         onSuccess: () => {
             showCreateModal.value = false
@@ -175,11 +196,12 @@ const formatCurrency = (amount) => {
 }
 
 const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('es-AR', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    })
+    if (!date) return '-'
+    const parts = String(date).split('-')
+    if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`
+    }
+    return date
 }
 
 const clearFilters = () => {
@@ -225,7 +247,7 @@ const filteredMovements = computed(() => {
 })
 
 const filteredOutflow = computed(() =>
-    filteredMovements.value.reduce((acc, movement) => acc + Number(movement.amount || 0), 0)
+    filteredMovements.value.reduce((acc, movement) => acc + Number(movement.accounting_total || 0), 0)
 )
 
 const isDragging = ref(false)
@@ -363,7 +385,7 @@ const handleDrop = (e) => {
                             'font-semibold',
                             row.is_high_value ? 'text-amber-600' : 'text-slate-900'
                         ]">
-                            {{ formatCurrency(value) }}
+                            {{ formatCurrency(row.accounting_total ?? value) }}
                         </span>
                     </template>
 
@@ -420,14 +442,30 @@ const handleDrop = (e) => {
             <form @submit.prevent="submitCreate" class="space-y-4">
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <FormInput v-model="form.date" type="date" label="Fecha" :error="form.errors.date" required />
-                    <FormInput v-model="form.amount" type="number" label="Cantidad" placeholder="0.00"
+                    <FormInput v-model="form.amount" type="number" :label="form.is_tax ? 'Monto impuesto' : 'Cantidad'" placeholder="0.00"
                         :error="form.errors.amount" required />
                 </div>
 
-                <FormInput v-model="form.description" label="Descripción" placeholder="Describe el gasto"
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <label class="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <input v-model="form.is_tax" type="checkbox" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                        Impuestos
+                    </label>
+
+                    <div v-if="form.is_tax" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormSelect v-model="form.tax_type" label="Tipo de impuesto" :options="taxTypeOptions"
+                            :error="form.errors.tax_type" required />
+                        <div class="text-sm text-slate-600 rounded-lg border border-slate-200 bg-white p-3">
+                            <div>Descripcion: <span class="font-semibold text-slate-900">{{ form.tax_type === 'debit' ? 'Impuesto débito' : 'Impuesto crédito' }}</span></div>
+                            <div>Beneficiario: <span class="font-semibold text-slate-900">AFIP / Entes fiscales</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <FormInput v-if="!form.is_tax" v-model="form.description" label="Descripción" placeholder="Describe el gasto"
                     :error="form.errors.description" required />
 
-                <FormInput v-model="form.recipient" label="Nombre del destinatario"
+                <FormInput v-if="!form.is_tax" v-model="form.recipient" label="Nombre del destinatario"
                     placeholder="¿Quién recibió el pago?" :error="form.errors.recipient" required />
 
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">

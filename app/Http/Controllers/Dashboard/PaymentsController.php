@@ -34,13 +34,17 @@ class PaymentsController extends Controller
                 'id' => $pay->id,
                 'date' => $pay->date->toDateString(),
                 'amount' => $pay->amount,
+                'tax_debit' => (float) ($pay->tax_debit ?? 0),
+                'tax_credit' => (float) ($pay->tax_credit ?? 0),
+                'accounting_total' => (float) $pay->amount + (float) ($pay->tax_debit ?? 0) - (float) ($pay->tax_credit ?? 0),
                 'description' => $pay->description,
                 'recipient' => $pay->recipient,
                 'payment_method' => $pay->payment_method,
                 'bank_account' => $pay->bankAccount
                     ? "{$pay->bankAccount->bank_name} - {$pay->bankAccount->account_type} {$pay->bankAccount->currency}"
                     : null,
-                'voucher_url' => $pay->voucher_url,
+                'voucher_url' => $pay->voucher_path ? route('payments.voucher', $pay) : null,
+                'voucher_extension' => $pay->voucher_path ? strtolower(pathinfo($pay->voucher_path, PATHINFO_EXTENSION)) : null,
                 'is_high_value' => $pay->is_high_value,
             ]);
 
@@ -51,6 +55,13 @@ class PaymentsController extends Controller
         $monthlyOutflow = $paymentsCollection
             ->whereBetween('date', [$monthStart, $monthEnd])
             ->sum('amount');
+        $monthlyDebitTaxes = $paymentsCollection
+            ->whereBetween('date', [$monthStart, $monthEnd])
+            ->sum('tax_debit');
+        $monthlyCreditTaxes = $paymentsCollection
+            ->whereBetween('date', [$monthStart, $monthEnd])
+            ->sum('tax_credit');
+        $monthlyOutflowWithTaxes = (float) $monthlyOutflow + (float) $monthlyDebitTaxes - (float) $monthlyCreditTaxes;
 
         $monthlyIncome = PaymentExpense::whereDate('payment_date', '>=', $monthStart->toDateString())
             ->whereDate('payment_date', '<=', $monthEnd->toDateString())
@@ -110,6 +121,11 @@ class PaymentsController extends Controller
                 'totalOutflow' => (float) $paymentsCollection->sum('amount'),
                 'monthlyOutflow' => (float) $monthlyOutflow,
                 'monthlyIncome' => (float) $monthlyIncome,
+                'totalDebitTaxes' => (float) $paymentsCollection->sum('tax_debit'),
+                'totalCreditTaxes' => (float) $paymentsCollection->sum('tax_credit'),
+                'monthlyDebitTaxes' => (float) $monthlyDebitTaxes,
+                'monthlyCreditTaxes' => (float) $monthlyCreditTaxes,
+                'monthlyOutflowWithTaxes' => (float) $monthlyOutflowWithTaxes,
                 'openingBalanceTotal' => $openingBalanceTotal,
                 'currentBalanceTotal' => $currentBalanceTotal,
                 'estimatedBalance' => (float) $estimatedBalance,
@@ -133,9 +149,16 @@ class PaymentsController extends Controller
         $neighborhoodId = session('neighborhood_id');
         $data = $request->validate([
             'date' => ['required', 'date'],
-            'amount' => ['required', 'numeric', 'min:0'],
-            'description' => ['required', 'string'],
-            'recipient' => ['required', 'string'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'is_tax' => ['nullable', 'boolean'],
+            'tax_type' => [
+                Rule::requiredIf(fn() => $request->boolean('is_tax')),
+                Rule::in(['debit', 'credit']),
+            ],
+            'tax_debit' => ['nullable', 'numeric', 'min:0'],
+            'tax_credit' => ['nullable', 'numeric', 'min:0'],
+            'description' => [Rule::requiredIf(fn() => !$request->boolean('is_tax')), 'nullable', 'string'],
+            'recipient' => [Rule::requiredIf(fn() => !$request->boolean('is_tax')), 'nullable', 'string'],
             'payment_method' => ['required', 'string'],
             'bank_account' => [
                 'nullable',
@@ -152,12 +175,31 @@ class PaymentsController extends Controller
                 ->store('vouchers');
         }
 
+        $isTax = $request->boolean('is_tax');
+        $amount = (float) $data['amount'];
+        $taxDebit = (float) ($data['tax_debit'] ?? 0);
+        $taxCredit = (float) ($data['tax_credit'] ?? 0);
+        $description = (string) ($data['description'] ?? '');
+        $recipient = (string) ($data['recipient'] ?? '');
+
+        if ($isTax) {
+            $taxDebit = ($data['tax_type'] ?? null) === 'debit' ? $amount : 0.0;
+            $taxCredit = ($data['tax_type'] ?? null) === 'credit' ? $amount : 0.0;
+            $amount = 0.0;
+            $description = ($data['tax_type'] ?? null) === 'debit'
+                ? 'Impuesto débito'
+                : 'Impuesto crédito';
+            $recipient = 'AFIP / Entes fiscales';
+        }
+
         Payment::create([
             'neighborhood_id' => $neighborhoodId,
             'date' => $data['date'],
-            'amount' => $data['amount'],
-            'description' => $data['description'],
-            'recipient' => $data['recipient'],
+            'amount' => $amount,
+            'tax_debit' => $taxDebit,
+            'tax_credit' => $taxCredit,
+            'description' => $description,
+            'recipient' => $recipient,
             'payment_method' => $data['payment_method'],
             'bank_account_id' => $data['payment_method'] === 'Cash'
                 ? null
@@ -293,12 +335,25 @@ class PaymentsController extends Controller
             ->sortBy(fn($row) => (int) str_replace('UF-', '', (string) $row['uf_number']))
             ->values();
 
-        $movements = Payment::with('bankAccount')
+        $paymentsForPeriod = Payment::with('bankAccount')
             ->where('neighborhood_id', $neighborhoodId)
             ->whereDate('date', '>=', $start->toDateString())
             ->whereDate('date', '<=', $end->toDateString())
             ->orderByDesc('date')
-            ->get()
+            ->get();
+
+        $outflow = (float) $paymentsForPeriod->sum('amount');
+        $debitTaxes = (float) $paymentsForPeriod->sum('tax_debit');
+        $creditTaxes = (float) $paymentsForPeriod->sum('tax_credit');
+        $netOutflowWithTaxes = (float) $outflow + $debitTaxes - $creditTaxes;
+
+        $movements = $paymentsForPeriod
+            ->filter(function ($payment) {
+                $isTaxOnly = (float) $payment->amount <= 0
+                    && (((float) ($payment->tax_debit ?? 0) > 0) || ((float) ($payment->tax_credit ?? 0) > 0));
+
+                return !$isTaxOnly;
+            })
             ->map(function ($payment) {
                 return [
                     'date' => $payment->date->toDateString(),
@@ -309,16 +364,32 @@ class PaymentsController extends Controller
                         ? "{$payment->bankAccount->bank_name} - {$payment->bankAccount->account_type} {$payment->bankAccount->currency}"
                         : '-',
                     'amount' => (float) $payment->amount,
+                    'tax_debit' => 0.0,
+                    'tax_credit' => 0.0,
+                    'accounting_total' => (float) $payment->amount,
                 ];
-            })
-            ->values();
+            });
+
+        if ($debitTaxes > 0 || $creditTaxes > 0) {
+            $movements->push([
+                'date' => $end->toDateString(),
+                'description' => 'Impuestos acumulados del período',
+                'recipient' => 'AFIP / Entes fiscales',
+                'method' => 'Ajuste fiscal',
+                'account' => '-',
+                'amount' => 0.0,
+                'tax_debit' => $debitTaxes,
+                'tax_credit' => $creditTaxes,
+                'accounting_total' => $debitTaxes - $creditTaxes,
+            ]);
+        }
+
+        $movements = $movements->values();
 
         $income = PaymentExpense::whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
             ->whereDate('payment_date', '>=', $start->toDateString())
             ->whereDate('payment_date', '<=', $end->toDateString())
             ->sum('amount');
-
-        $outflow = $movements->sum('amount');
 
         return response()->view('reports/monthly-reconciliation', [
             'neighborhoodName' => $neighborhood->name,
@@ -338,7 +409,10 @@ class PaymentsController extends Controller
                 'cumulative_outstanding' => (float) $debtByOwner->sum('total_outstanding'),
                 'income' => (float) $income,
                 'outflow' => (float) $outflow,
-                'net' => (float) ($income - $outflow),
+                'debit_taxes' => (float) $debitTaxes,
+                'credit_taxes' => (float) $creditTaxes,
+                'outflow_with_taxes' => (float) $netOutflowWithTaxes,
+                'net' => (float) ($income - $netOutflowWithTaxes),
             ],
         ]);
     }

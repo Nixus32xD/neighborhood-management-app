@@ -12,6 +12,8 @@ class Payment extends Model
         'neighborhood_id',
         'date',
         'amount',
+        'tax_debit',
+        'tax_credit',
         'description',
         'recipient',
         'payment_method',
@@ -22,6 +24,8 @@ class Payment extends Model
     protected $casts = [
         'date' => 'date',
         'amount' => 'decimal:2',
+        'tax_debit' => 'decimal:2',
+        'tax_credit' => 'decimal:2',
     ];
 
     /* Helpers */
