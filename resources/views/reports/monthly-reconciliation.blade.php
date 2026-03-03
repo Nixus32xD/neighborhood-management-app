@@ -255,7 +255,7 @@
                 <?php if($totals['extraordinary'] > 0): ?>
                 <th class="text-right th-extra">Extraordinaria</th>
                 <?php endif; ?>
-                <th class="text-right th-fines">Multas</th>
+                <th class="text-right th-fines">Deudas</th>
                 <th class="text-right">Total</th>
                 <th class="text-right th-paid">Pagado</th>
                 <th class="text-right th-outstanding">Pendiente</th>
