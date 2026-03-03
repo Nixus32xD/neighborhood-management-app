@@ -11,6 +11,7 @@ use App\Models\PaymentExpense;
 use App\Models\UnitExpense;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -80,7 +81,8 @@ class PaymentsController extends Controller
             $paymentsOutflow = Payment::where('neighborhood_id', $neighborhoodId)
                 ->where('bank_account_id', $account->id)
                 ->when($openingDate, fn($q) => $q->whereDate('date', '>=', $openingDate))
-                ->sum('amount');
+                ->select(DB::raw('COALESCE(SUM(amount + tax_debit - tax_credit), 0) as total'))
+                ->value('total');
 
             $manualIncome = BankMovement::where('neighborhood_id', $neighborhoodId)
                 ->where('bank_account_id', $account->id)
@@ -111,7 +113,7 @@ class PaymentsController extends Controller
 
         $openingBalanceTotal = (float) $accountsSummary->sum('opening_balance');
         $currentBalanceTotal = (float) $accountsSummary->sum('current_balance');
-        $estimatedBalance = $currentBalanceTotal + ((float) $monthlyIncome - (float) $monthlyOutflow);
+        $estimatedBalance = $currentBalanceTotal + ((float) $monthlyIncome - (float) $monthlyOutflowWithTaxes);
 
         return Inertia::render('Payments/Index', [
             'movements' => $payments,
