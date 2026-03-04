@@ -9,6 +9,7 @@ class PaymentExpense extends Model
     protected $fillable = [
         'unit_expense_id',
         'unit_id',
+        'bank_account_id',
         'amount',
         'payment_date',
         'payment_method',
@@ -28,5 +29,10 @@ class PaymentExpense extends Model
     public function unit()
     {
         return $this->belongsTo(Unit::class);
+    }
+
+    public function bankAccount()
+    {
+        return $this->belongsTo(BankAccount::class);
     }
 }

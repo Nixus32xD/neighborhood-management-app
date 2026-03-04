@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\BankAccount;
 use App\Models\Neighborhood;
 use App\Models\UnitExpense;
 use App\Services\ExpenseGeneratorService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class ExpensesController extends Controller
@@ -61,6 +63,7 @@ class ExpensesController extends Controller
         // dd(Carbon::now()->format('Y-m-d H:i:s'));
         return Inertia::render('Expenses/Index', [
             'expenses' => $rows,
+            'bankAccounts' => BankAccount::options(),
             'summary' => [
                 'totalMonthly' => $rows->sum('monthly_expense'),
                 'totalExtraordinary' => $rows->sum('extraordinary'),
@@ -82,6 +85,8 @@ class ExpensesController extends Controller
      */
     public function store(Request $request)
     {
+        $neighborhoodId = session('neighborhood_id');
+
         // 1. Validamos.
         // OJO: En tu frontend el campo se llama 'unit_id', pero trae el ID de la expensa.
         // Lo validamos contra la tabla 'unit_expenses'.
@@ -90,6 +95,11 @@ class ExpensesController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'payment_date' => 'required|date',
             'payment_method' => 'required|string',
+            'bank_account' => [
+                'nullable',
+                Rule::requiredIf(fn() => in_array($request->input('payment_method'), ['bank_transfer', 'check'], true)),
+                Rule::exists('bank_accounts', 'id')->where(fn($q) => $q->where('neighborhood_id', $neighborhoodId)),
+            ],
             'reference' => 'nullable|string|max:255',
         ]);
 
@@ -104,6 +114,9 @@ class ExpensesController extends Controller
                 'amount' => $data['amount'],
                 'payment_date' => $data['payment_date'],
                 'payment_method' => $data['payment_method'],
+                'bank_account_id' => $data['payment_method'] === 'cash'
+                    ? null
+                    : ($data['bank_account'] ?? null),
                 'reference' => $data['reference'] ?? null,
             ]);
 

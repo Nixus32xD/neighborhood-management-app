@@ -96,8 +96,13 @@ class PaymentsController extends Controller
                 ->when($openingDate, fn($q) => $q->whereDate('date', '>=', $openingDate))
                 ->sum('amount');
 
+            $expenseIncome = PaymentExpense::where('bank_account_id', $account->id)
+                ->whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
+                ->when($openingDate, fn($q) => $q->whereDate('payment_date', '>=', $openingDate))
+                ->sum('amount');
+
             $openingBalance = (float) ($account->opening_balance ?? 0);
-            $currentBalance = $openingBalance + (float) $manualIncome - ((float) $manualExpense + (float) $paymentsOutflow);
+            $currentBalance = $openingBalance + (float) $manualIncome + (float) $expenseIncome - ((float) $manualExpense + (float) $paymentsOutflow);
 
             return [
                 'id' => $account->id,
@@ -107,6 +112,7 @@ class PaymentsController extends Controller
                 'current_balance' => (float) $currentBalance,
                 'payments_outflow' => (float) $paymentsOutflow,
                 'manual_income' => (float) $manualIncome,
+                'expense_income' => (float) $expenseIncome,
                 'manual_expense' => (float) $manualExpense,
             ];
         })->values();

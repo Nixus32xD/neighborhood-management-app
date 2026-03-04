@@ -18,6 +18,10 @@ const props = defineProps({
         type: Array,
         default: () => []
     },
+    bankAccounts: {
+        type: Array,
+        default: () => []
+    },
     summary: {
         type: Object,
         default: () => ({
@@ -67,6 +71,7 @@ const paymentForm = useForm({
     amount: '',
     payment_date: '',
     payment_method: 'bank_transfer',
+    bank_account: '',
     reference: ''
 })
 
@@ -330,6 +335,15 @@ const paymentMethodOptions = [
     { value: 'other', label: 'Otro' }
 ]
 
+watch(
+    () => paymentForm.payment_method,
+    (method) => {
+        if (method === 'cash') {
+            paymentForm.bank_account = ''
+        }
+    }
+)
+
 const ahora = new Date();
 const dia = String(ahora.getDate()).padStart(2, '0');
 const mes = String(ahora.getMonth() + 1).padStart(2, '0'); // Enero es 0
@@ -527,6 +541,10 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
 
                 <FormSelect v-model="paymentForm.payment_method" label="Método de pago" :options="paymentMethodOptions"
                     :error="paymentForm.errors.payment_method" required />
+
+                <FormSelect v-model="paymentForm.bank_account" label="Cuenta bancaria" :options="bankAccounts"
+                    :error="paymentForm.errors.bank_account"
+                    :disabled="paymentForm.payment_method === 'cash'" />
 
                 <FormTextarea v-model="paymentForm.reference" label="Referencia / Notas"
                     placeholder="Referencia de transacción, número de recibo o notas adicionales..." :rows="2"
