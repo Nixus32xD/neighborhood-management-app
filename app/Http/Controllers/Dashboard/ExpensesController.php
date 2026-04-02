@@ -41,6 +41,7 @@ class ExpensesController extends Controller
 
                 $paid = $e->payments->sum('amount');
                 $outstanding = max(0, $total - $paid);
+
                 return [
                     'id' => $e->id,                 // unit_expense_id
                     'unit_id' => $e->unit->id,      // unit_id real
@@ -52,6 +53,7 @@ class ExpensesController extends Controller
                     'monthly_expense' => $e->monthly_amount,
                     'extraordinary' => $e->extraordinary_amount,
                     'fines' => $e->fines_amount,
+                    'paid_amount' => (float) $paid,
                     'outstanding_debt' => $outstanding,
                     'total_balance' => $total,
                     'status' => $outstanding === 0
@@ -69,7 +71,7 @@ class ExpensesController extends Controller
                 'totalExtraordinary' => $rows->sum('extraordinary'),
                 'totalFines' => $rows->sum('fines'),
                 'totalOutstanding' => $rows->sum('outstanding_debt'),
-                'totalCollected' => $rows->sum('total_balance') - $rows->sum('outstanding_debt'),
+                'totalCollected' => $rows->sum('paid_amount'),
             ],
             // 2. AGREGADO: Pasamos la configuración al frontend
             'neighborhoodConfig' => [

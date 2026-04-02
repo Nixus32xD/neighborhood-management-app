@@ -160,15 +160,23 @@ const filteredExpenses = computed(() => {
 })
 
 
-// Totales de la tabla filtrada
-const totals = computed(() => {
+// Resumen filtrado para cards y totales de tabla
+const filteredSummary = computed(() => {
     return filteredExpenses.value.reduce((acc, exp) => ({
-        monthly: acc.monthly + Number(exp.monthly_expense),
-        extraordinary: acc.extraordinary + Number(exp.extraordinary),
-        fines: acc.fines + Number(exp.fines),
-        outstanding: acc.outstanding + Number(exp.outstanding_debt),
-        total: acc.total + Number(exp.total_balance)
-    }), { monthly: 0, extraordinary: 0, fines: 0, outstanding: 0, total: 0 })
+        monthly: acc.monthly + Number(exp.monthly_expense || 0),
+        extraordinary: acc.extraordinary + Number(exp.extraordinary || 0),
+        fines: acc.fines + Number(exp.fines || 0),
+        outstanding: acc.outstanding + Number(exp.outstanding_debt || 0),
+        total: acc.total + Number(exp.total_balance || 0),
+        collected: acc.collected + Number(exp.paid_amount || 0),
+    }), {
+        monthly: 0,
+        extraordinary: 0,
+        fines: 0,
+        outstanding: 0,
+        total: 0,
+        collected: 0,
+    })
 })
 
 // --- HELPERS ---
@@ -358,11 +366,11 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
     <DashboardLayout title="Expensas y Honorarios">
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-            <StatCard title="Expensas Mensuales" :value="formatCurrency(summary.totalMonthly)" :icon="DollarSign" />
-            <StatCard title="Extraordinaria" :value="formatCurrency(summary.totalExtraordinary)" :icon="TrendingUp" />
-            <StatCard title="Multas" :value="formatCurrency(summary.totalFines)" :icon="AlertTriangle" />
-            <StatCard title="Pendiente Cobro" :value="formatCurrency(summary.totalOutstanding)" :icon="TrendingDown" />
-            <StatCard title="Total Recaudado" :value="formatCurrency(summary.totalCollected)" :icon="DollarSign" />
+            <StatCard title="Expensas Mensuales" :value="formatCurrency(filteredSummary.monthly)" :icon="DollarSign" />
+            <StatCard title="Extraordinaria" :value="formatCurrency(filteredSummary.extraordinary)" :icon="TrendingUp" />
+            <StatCard title="Multas" :value="formatCurrency(filteredSummary.fines)" :icon="AlertTriangle" />
+            <StatCard title="Pendiente Cobro" :value="formatCurrency(filteredSummary.outstanding)" :icon="TrendingDown" />
+            <StatCard title="Total Recaudado" :value="formatCurrency(filteredSummary.collected)" :icon="DollarSign" />
         </div>
 
         <Card title="Panorama Financiero de la UF" subtitle="Expensas mensuales, multas y saldos pendientes">
@@ -442,13 +450,13 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                 <div class="border-t-2 border-slate-300 bg-slate-50 px-4 py-3 -mx-6 -mb-4 mt-4 rounded-b-lg overflow-x-auto">
                     <div class="grid min-w-[700px] grid-cols-8 gap-4 text-sm">
                         <div class="col-span-2 font-semibold text-slate-700">Totales</div>
-                        <div class="text-right font-semibold text-slate-900">{{ formatCurrency(totals.monthly) }}</div>
-                        <div class="text-right font-semibold text-amber-600">{{ formatCurrency(totals.extraordinary) }}
+                        <div class="text-right font-semibold text-slate-900">{{ formatCurrency(filteredSummary.monthly) }}</div>
+                        <div class="text-right font-semibold text-amber-600">{{ formatCurrency(filteredSummary.extraordinary) }}
                         </div>
-                        <div class="text-right font-semibold text-red-600">{{ formatCurrency(totals.fines) }}</div>
-                        <div class="text-right font-semibold text-red-600">{{ formatCurrency(totals.outstanding) }}
+                        <div class="text-right font-semibold text-red-600">{{ formatCurrency(filteredSummary.fines) }}</div>
+                        <div class="text-right font-semibold text-red-600">{{ formatCurrency(filteredSummary.outstanding) }}
                         </div>
-                        <div class="text-right font-bold text-slate-900">{{ formatCurrency(totals.total) }}</div>
+                        <div class="text-right font-bold text-slate-900">{{ formatCurrency(filteredSummary.total) }}</div>
                         <div></div>
                     </div>
                 </div>
