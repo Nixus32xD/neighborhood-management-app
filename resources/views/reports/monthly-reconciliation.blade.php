@@ -259,7 +259,7 @@
                 <?php if($totals['extraordinary'] > 0): ?>
                 <th class="text-right th-extra">Extraordinaria</th>
                 <?php endif; ?>
-                <th class="text-right th-fines">Deudas</th>
+                <th class="text-right th-fines">Multas / intereses + deuda anterior</th>
                 <th class="text-right">Total</th>
                 <th class="text-right th-paid">Pagado</th>
                 <th class="text-right th-outstanding">Pendiente</th>
@@ -297,34 +297,6 @@
             @endforelse
         </tbody>
     </table>
-
-    {{-- <h2 class="section-title">Deudas acumuladas por propietario</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>UF</th>
-                <th>Propietario</th>
-                <th class="text-right">Deuda anterior</th>
-                <th class="text-right">Pendiente del periodo</th>
-                <th class="text-right">Total adeudado</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse ($debtByOwner as $debt)
-                <tr>
-                    <td>{{ $debt['uf_number'] }}</td>
-                    <td>{{ $debt['owner'] ?: '-' }}</td>
-                    <td class="text-right">${{ number_format($debt['historical_outstanding'], 2, ',', '.') }}</td>
-                    <td class="text-right">${{ number_format($debt['current_outstanding'], 2, ',', '.') }}</td>
-                    <td class="text-right">${{ number_format($debt['total_outstanding'], 2, ',', '.') }}</td>
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="5">No hay deuda acumulada al cierre del periodo.</td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table> --}}
 
     <h2 class="section-title">Movimientos bancarios del mes</h2>
     <table>

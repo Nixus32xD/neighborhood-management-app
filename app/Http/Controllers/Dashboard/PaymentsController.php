@@ -288,6 +288,7 @@ class PaymentsController extends Controller
                 $outstanding = max(0, $total - $paid);
 
                 return [
+                    'unit_id' => $expense->unit_id,
                     'uf_number' => 'UF-' . $expense->unit->uf_number,
                     'owner' => $expense->unit->owners->pluck('full_name')->join(', '),
                     'monthly' => $monthly,
@@ -332,6 +333,7 @@ class PaymentsController extends Controller
                 }
 
                 return [
+                    'unit_id' => $first?->unit_id,
                     'uf_number' => 'UF-' . $uf,
                     'owner' => $owner,
                     'historical_outstanding' => (float) $historicalOutstanding,
@@ -340,6 +342,43 @@ class PaymentsController extends Controller
                 ];
             })
             ->filter(fn($row) => $row['total_outstanding'] > 0)
+            ->sortBy(fn($row) => (int) str_replace('UF-', '', (string) $row['uf_number']))
+            ->values();
+
+        $debtByUnit = $debtByOwner->keyBy('unit_id');
+
+        $expenses = $expenses
+            ->map(function ($expense) use ($debtByUnit) {
+                $historicalOutstanding = (float) ($debtByUnit->get($expense['unit_id'])['historical_outstanding'] ?? 0);
+                $displayFines = (float) $expense['fines'] + $historicalOutstanding;
+                $displayOutstanding = (float) $expense['outstanding'] + $historicalOutstanding;
+
+                $expense['historical_outstanding'] = $historicalOutstanding;
+                $expense['fines'] = $displayFines;
+                $expense['total'] = (float) $expense['monthly'] + (float) $expense['extraordinary'] + $displayFines;
+                $expense['outstanding'] = $displayOutstanding;
+                $expense['status'] = $displayOutstanding <= 0 ? 'Pagado' : 'Pendiente';
+
+                return $expense;
+            })
+            ->concat(
+                $debtByOwner
+                    ->filter(fn($debt) => (float) $debt['historical_outstanding'] > 0)
+                    ->reject(fn($debt) => $expenses->contains('unit_id', $debt['unit_id']))
+                    ->map(fn($debt) => [
+                        'unit_id' => $debt['unit_id'],
+                        'uf_number' => $debt['uf_number'],
+                        'owner' => $debt['owner'],
+                        'monthly' => 0.0,
+                        'extraordinary' => 0.0,
+                        'fines' => (float) $debt['historical_outstanding'],
+                        'paid' => 0.0,
+                        'outstanding' => (float) $debt['historical_outstanding'],
+                        'total' => (float) $debt['historical_outstanding'],
+                        'status' => 'Pendiente',
+                        'historical_outstanding' => (float) $debt['historical_outstanding'],
+                    ])
+            )
             ->sortBy(fn($row) => (int) str_replace('UF-', '', (string) $row['uf_number']))
             ->values();
 
