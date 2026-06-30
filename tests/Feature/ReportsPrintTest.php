@@ -116,6 +116,7 @@ test('monthly reconciliation print merges historical debt into the main row', fu
         return true;
     });
 
+    $response->assertSeeInOrder(['Propietario', 'Total a Pagar', 'Mensual (a pagar)']);
     $response->assertSeeText('Multas / intereses + deuda anterior');
     $response->assertDontSeeText('Deuda acumulada por propietario');
 });

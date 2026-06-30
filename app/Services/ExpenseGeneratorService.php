@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Neighborhood;
+use App\Models\Unit;
 use App\Models\UnitExpense;
 use Illuminate\Support\Facades\DB;
 
@@ -58,24 +59,12 @@ class ExpenseGeneratorService
                         );
                     }
 
-                    // Ejemplo: (46000 / 500) * superficie_total = fondo a distribuir
-                    $ratePerMeter = $baseAmount / $baseMeters;
-                    $distributableTotal = $ratePerMeter * $totalSurface;
-
-                    // Formatos soportados en expense_coefficient:
-                    // - 4.68 (porcentaje)
-                    // - 0.0468 (coeficiente decimal)
-                    $rawCoefficient = $unit->expense_coefficient;
-
-                    if ($rawCoefficient !== null) {
-                        $coefficient = (float) $rawCoefficient;
-                        $coefficient = $coefficient > 1 ? ($coefficient / 100) : $coefficient;
-                        $amount = round($distributableTotal * $coefficient, 2);
-                    } else {
-                        $unitSurface = (float) ($unit->surface_area ?? 0);
-                        $ratio = $totalSurface > 0 ? ($unitSurface / $totalSurface) : 0;
-                        $amount = round($distributableTotal * $ratio, 2);
-                    }
+                    $amount = $this->calculateProportionalAmount(
+                        $unit,
+                        $baseAmount,
+                        $baseMeters,
+                        $totalSurface
+                    );
                 }
 
                 UnitExpense::create([
@@ -87,5 +76,51 @@ class ExpenseGeneratorService
                 ]);
             }
         });
+    }
+
+    public function calculateProportionalAmount(
+        Unit $unit,
+        float $baseAmount,
+        float $baseMeters,
+        float $totalSurface
+    ): float {
+        if ($baseAmount <= 0) {
+            throw new \InvalidArgumentException(
+                'Para CC2 proporcional, base_amount debe ser mayor a 0.'
+            );
+        }
+
+        if ($baseMeters <= 0) {
+            throw new \InvalidArgumentException(
+                'Para CC2 proporcional, base_meters debe ser mayor a 0.'
+            );
+        }
+
+        if ($totalSurface <= 0) {
+            throw new \InvalidArgumentException(
+                'La superficie total del barrio debe ser mayor a 0 para CC2.'
+            );
+        }
+
+        // Ejemplo: (46000 / 500) * superficie_total = fondo a distribuir
+        $ratePerMeter = $baseAmount / $baseMeters;
+        $distributableTotal = $ratePerMeter * $totalSurface;
+
+        // Formatos soportados en expense_coefficient:
+        // - 4.68 (porcentaje)
+        // - 0.0468 (coeficiente decimal)
+        $rawCoefficient = $unit->expense_coefficient;
+
+        if ($rawCoefficient !== null) {
+            $coefficient = (float) $rawCoefficient;
+            $coefficient = $coefficient > 1 ? ($coefficient / 100) : $coefficient;
+
+            return round($distributableTotal * $coefficient, 2);
+        }
+
+        $unitSurface = (float) ($unit->surface_area ?? 0);
+        $ratio = $totalSurface > 0 ? ($unitSurface / $totalSurface) : 0;
+
+        return round($distributableTotal * $ratio, 2);
     }
 }

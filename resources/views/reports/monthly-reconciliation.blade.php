@@ -255,12 +255,12 @@
             <tr>
                 <th class="th-monthly">UF</th>
                 <th class="th-monthly">Propietario</th>
+                <th class="text-right">Total a Pagar</th>
                 <th class="text-right th-monthly">Mensual (a pagar)</th>
                 <?php if($totals['extraordinary'] > 0): ?>
                 <th class="text-right th-extra">Extraordinaria</th>
                 <?php endif; ?>
                 <th class="text-right th-fines">Multas / intereses + deuda anterior</th>
-                <th class="text-right">Total</th>
                 <th class="text-right th-paid">Pagado</th>
                 <th class="text-right th-outstanding">Pendiente</th>
                 <th>Estado</th>
@@ -271,6 +271,7 @@
                 <tr>
                     <td class="amount-monthly">{{ $expense['uf_number'] }}</td>
                     <td class="amount-monthly">{{ $expense['owner'] ?: '-' }}</td>
+                    <td class="text-right">${{ number_format($expense['total'], 2, ',', '.') }}</td>
                     <td class="text-right amount-monthly">${{ number_format($expense['monthly'], 2, ',', '.') }}</td>
                     <?php if($totals['extraordinary'] > 0): ?>
                     <td
@@ -279,7 +280,6 @@
                     </td>
                     <?php endif; ?>
                     <td class="text-right amount-fines">${{ number_format($expense['fines'], 2, ',', '.') }}</td>
-                    <td class="text-right">${{ number_format($expense['total'], 2, ',', '.') }}</td>
                     <td class="text-right amount-paid">${{ number_format($expense['paid'], 2, ',', '.') }}</td>
                     <td class="text-right amount-outstanding">
                         ${{ number_format($expense['outstanding'], 2, ',', '.') }}</td>

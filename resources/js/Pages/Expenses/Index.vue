@@ -88,7 +88,8 @@ const generateForm = useForm({
 const showExtraordinaryModal = ref(false)
 const extraordinaryForm = useForm({
     period: new Date().toISOString().slice(0, 7),
-    amount: ''
+    amount: '',
+    base_meters: 500
 })
 
 // Modal Multa Manual
@@ -282,6 +283,7 @@ const submitGeneration = () => {
 const openExtraordinaryModal = () => {
     extraordinaryForm.reset()
     extraordinaryForm.period = getCurrentPeriod()
+    extraordinaryForm.base_meters = 500
     showExtraordinaryModal.value = true
 }
 
@@ -636,7 +638,11 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                     <div>
                         <h4 class="text-sm font-medium text-amber-900">Aplicación Masiva</h4>
                         <p class="text-xs text-amber-700 mt-1">
-                            Se sumará el monto extraordinario a todas las unidades del período seleccionado.
+                            {{
+                                neighborhoodConfig.type === 'proportional'
+                                    ? 'En CC2 se calculara proporcionalmente segun los metros del lote.'
+                                    : 'Se sumara el monto extraordinario a todas las unidades del periodo seleccionado.'
+                            }}
                         </p>
                     </div>
                 </div>
@@ -644,8 +650,20 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                 <FormInput v-model="extraordinaryForm.period" type="month" label="Período"
                     :error="extraordinaryForm.errors.period" required />
 
-                <FormInput v-model="extraordinaryForm.amount" type="number" label="Monto Extraordinario por Unidad"
+                <FormInput v-model="extraordinaryForm.amount" type="number"
+                    :label="neighborhoodConfig.type === 'proportional' ? 'Monto base extraordinario ($)' : 'Monto Extraordinario por Unidad'"
                     placeholder="Ej: 75000" :error="extraordinaryForm.errors.amount" min="1" step="0.01" required />
+
+                <div v-if="neighborhoodConfig.type === 'proportional'" class="space-y-3">
+                    <FormInput v-model="extraordinaryForm.base_meters" type="number" label="Metros Base para el calculo"
+                        placeholder="Ej: 500" :error="extraordinaryForm.errors.base_meters" min="0.01" step="0.01"
+                        required />
+
+                    <div class="text-xs text-slate-500 bg-slate-50 p-3 rounded border">
+                        <strong>Formula estimada:</strong> <br>
+                        (${{ extraordinaryForm.amount || 0 }} / {{ extraordinaryForm.base_meters || 1 }}m²) × metros de cada lote
+                    </div>
+                </div>
             </form>
 
             <template #footer>

@@ -172,35 +172,49 @@ class ExpensesController extends Controller
 
         return back()->with('success', 'Multa aplicada correctamente.');
     }
-    public function addExtraordinary(Request $request)
+
+    public function addExtraordinary(Request $request, ExpenseGeneratorService $generator)
     {
         $neighborhoodId = session('neighborhood_id');
         $data = $request->validate([
             'period' => 'required|date_format:Y-m',
             'amount' => 'required|numeric|min:1',
+            'base_meters' => 'nullable|numeric|min:0.01',
         ]);
 
-        $neighborhood = Neighborhood::with('units:id,neighborhood_id')
+        $neighborhood = Neighborhood::with('units:id,neighborhood_id,surface_area,expense_coefficient')
             ->findOrFail($neighborhoodId);
 
-        DB::transaction(function () use ($neighborhood, $data) {
-            foreach ($neighborhood->units as $unit) {
-                $expense = UnitExpense::firstOrCreate(
-                    [
-                        'unit_id' => $unit->id,
-                        'period' => $data['period'],
-                    ],
-                    [
-                        'monthly_amount' => 0,
-                        'extraordinary_amount' => 0,
-                        'fines_amount' => 0,
-                        'paid_amount' => 0,
-                    ]
-                );
+        try {
+            DB::transaction(function () use ($neighborhood, $data, $generator) {
+                $amount = (float) $data['amount'];
+                $baseMeters = (float) ($data['base_meters'] ?? 500);
+                $totalSurface = (float) $neighborhood->units->sum('surface_area');
 
-                $expense->increment('extraordinary_amount', $data['amount']);
-            }
-        });
+                foreach ($neighborhood->units as $unit) {
+                    $extraordinaryAmount = $neighborhood->expense_calculation_type === 'proportional'
+                        ? $generator->calculateProportionalAmount($unit, $amount, $baseMeters, $totalSurface)
+                        : $amount;
+
+                    $expense = UnitExpense::firstOrCreate(
+                        [
+                            'unit_id' => $unit->id,
+                            'period' => $data['period'],
+                        ],
+                        [
+                            'monthly_amount' => 0,
+                            'extraordinary_amount' => 0,
+                            'fines_amount' => 0,
+                            'paid_amount' => 0,
+                        ]
+                    );
+
+                    $expense->increment('extraordinary_amount', $extraordinaryAmount);
+                }
+            });
+        } catch (\InvalidArgumentException $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Expensa extraordinaria aplicada.');
     }
