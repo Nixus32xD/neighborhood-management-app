@@ -11,7 +11,7 @@ import FormSelect from '@/Components/FormSelect.vue'
 import FormInput from '@/Components/FormInput.vue'
 import FormTextarea from '@/Components/FormTextarea.vue'
 import Modal from '@/Components/Modal.vue'
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Filter, Plus, CreditCard, CheckCircle, AlertCircle, CalendarPlus } from 'lucide-vue-next'
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Filter, Plus, CreditCard, CheckCircle, AlertCircle, CalendarPlus, ListChecks } from 'lucide-vue-next'
 
 const props = defineProps({
     expenses: {
@@ -66,7 +66,16 @@ const periodOptions = computed(() => {
 
 // Modal Pago
 const showPaymentModal = ref(false)
+const paymentMode = ref('period')
 const paymentForm = useForm({
+    unit_id: '',
+    amount: '',
+    payment_date: '',
+    payment_method: 'bank_transfer',
+    bank_account: '',
+    reference: ''
+})
+const accumulatedPaymentForm = useForm({
     unit_id: '',
     amount: '',
     payment_date: '',
@@ -113,11 +122,96 @@ const unitOptions = computed(() => {
         }))
 })
 
+const accumulatedUnitOptions = computed(() => {
+    const currentPeriod = getCurrentPeriod()
+    const units = new Map()
+
+    props.expenses
+        .filter(exp => Number(exp.outstanding_debt) > 0 && exp.period <= currentPeriod)
+        .sort((a, b) => a.uf_number.localeCompare(b.uf_number, undefined, { numeric: true }))
+        .forEach(exp => {
+            const unitId = exp.unit_id?.toString()
+
+            if (!unitId || units.has(unitId)) return
+
+            units.set(unitId, {
+                value: unitId,
+                label: `${exp.uf_number} - ${exp.owner}`
+            })
+        })
+
+    return Array.from(units.values())
+})
+
 
 // Unidad seleccionada en el modal
 const selectedUnit = computed(() => {
     if (!paymentForm.unit_id) return null
     return props.expenses.find(exp => exp.id.toString() === paymentForm.unit_id)
+})
+
+const selectedAccumulatedUnit = computed(() => {
+    if (!accumulatedPaymentForm.unit_id) return null
+    return props.expenses.find(exp => exp.unit_id.toString() === accumulatedPaymentForm.unit_id)
+})
+
+const accumulatedDebts = computed(() => {
+    if (!accumulatedPaymentForm.unit_id) return []
+
+    const currentPeriod = getCurrentPeriod()
+
+    return props.expenses
+        .filter(exp =>
+            exp.unit_id.toString() === accumulatedPaymentForm.unit_id &&
+            exp.period <= currentPeriod &&
+            Number(exp.outstanding_debt) > 0
+        )
+        .sort((a, b) => a.period.localeCompare(b.period))
+})
+
+const accumulatedTotalDebt = computed(() => {
+    return accumulatedDebts.value.reduce(
+        (total, exp) => total + Number(exp.outstanding_debt || 0),
+        0
+    )
+})
+
+const accumulatedPaymentRows = computed(() => {
+    let remaining = Number(accumulatedPaymentForm.amount || 0)
+
+    return accumulatedDebts.value.map(exp => {
+        const debt = Number(exp.outstanding_debt || 0)
+        const applied = Math.max(0, Math.min(remaining, debt))
+        remaining -= applied
+
+        return {
+            ...exp,
+            applied,
+            remaining_debt: debt - applied
+        }
+    })
+})
+
+const accumulatedOverpayment = computed(() => {
+    return Math.max(0, Number(accumulatedPaymentForm.amount || 0) - accumulatedTotalDebt.value)
+})
+
+const paymentSubmitDisabled = computed(() => {
+    if (paymentMode.value === 'period') {
+        return !paymentForm.unit_id || !paymentForm.amount || paymentForm.processing
+    }
+
+    return !accumulatedPaymentForm.unit_id ||
+        !accumulatedPaymentForm.amount ||
+        accumulatedPaymentForm.processing ||
+        accumulatedTotalDebt.value <= 0 ||
+        accumulatedOverpayment.value > 0
+})
+
+const paymentProcessing = computed(() => {
+    return paymentMode.value === 'period'
+        ? paymentForm.processing
+        : accumulatedPaymentForm.processing
 })
 
 // Indicador visual de cobertura del pago
@@ -239,10 +333,14 @@ const getStatusLabel = (status) => {
 // --- ACCIONES ---
 
 const openPaymentModal = () => {
+    paymentMode.value = 'period'
     periodFilter.value = 'all' // 👈 CLAVE
     paymentForm.reset()
+    accumulatedPaymentForm.reset()
     paymentForm.payment_date = getLocalDate()
     paymentForm.payment_method = 'bank_transfer'
+    accumulatedPaymentForm.payment_date = getLocalDate()
+    accumulatedPaymentForm.payment_method = 'bank_transfer'
     showPaymentModal.value = true
 }
 
@@ -250,6 +348,7 @@ const openPaymentModal = () => {
 const closePaymentModal = () => {
     showPaymentModal.value = false
     paymentForm.reset()
+    accumulatedPaymentForm.reset()
 }
 
 const fillFullAmount = () => {
@@ -258,8 +357,22 @@ const fillFullAmount = () => {
     }
 }
 
+const fillAccumulatedAmount = () => {
+    if (accumulatedTotalDebt.value > 0) {
+        accumulatedPaymentForm.amount = accumulatedTotalDebt.value.toString()
+    }
+}
+
 const submitPayment = () => {
-    paymentForm.post(route('expenses.store'), {
+    const form = paymentMode.value === 'period'
+        ? paymentForm
+        : accumulatedPaymentForm
+
+    const routeName = paymentMode.value === 'period'
+        ? 'expenses.store'
+        : 'expenses.accumulated.store'
+
+    form.post(route(routeName), {
         onSuccess: () => closePaymentModal()
     })
 }
@@ -350,6 +463,15 @@ watch(
     (method) => {
         if (method === 'cash') {
             paymentForm.bank_account = ''
+        }
+    }
+)
+
+watch(
+    () => accumulatedPaymentForm.payment_method,
+    (method) => {
+        if (method === 'cash') {
+            accumulatedPaymentForm.bank_account = ''
         }
     }
 )
@@ -480,12 +602,32 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
             </div>
         </div>
 
-        <Modal :show="showPaymentModal" title="Registrar Pago" max-width="lg" @close="closePaymentModal">
-            <p class="text-xs text-slate-500">
+        <Modal :show="showPaymentModal" title="Registrar Pago" max-width="2xl" @close="closePaymentModal">
+            <div class="mb-5 grid grid-cols-2 rounded-lg border border-slate-200 bg-slate-100 p-1 text-sm font-medium">
+                <button type="button" :class="[
+                    'inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 transition-colors',
+                    paymentMode === 'period'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                ]" @click="paymentMode = 'period'">
+                    <CreditCard class="w-4 h-4" />
+                    Pago por periodo
+                </button>
+                <button type="button" :class="[
+                    'inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 transition-colors',
+                    paymentMode === 'accumulated'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                ]" @click="paymentMode = 'accumulated'">
+                    <ListChecks class="w-4 h-4" />
+                    Pago acumulado
+                </button>
+            </div>
+            <p v-if="paymentMode === 'period'" class="text-xs text-slate-500">
                 Se muestran todas las unidades con saldo pendiente, sin importar el período seleccionado.
             </p>
 
-            <form @submit.prevent="submitPayment" class="space-y-5">
+            <form v-if="paymentMode === 'period'" @submit.prevent="submitPayment" class="space-y-5">
                 <div>
                     <FormSelect v-model="paymentForm.unit_id" label="Seleccionar unidad (UF)" :options="unitOptions"
                         placeholder="Elija una unidad con saldo pendiente" :error="paymentForm.errors.unit_id"
@@ -561,16 +703,112 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                     :error="paymentForm.errors.reference" />
             </form>
 
+            <form v-else @submit.prevent="submitPayment" class="space-y-5">
+                <div>
+                    <FormSelect v-model="accumulatedPaymentForm.unit_id" label="Seleccionar unidad (UF)"
+                        :options="accumulatedUnitOptions" placeholder="Elija una unidad con saldo pendiente"
+                        :error="accumulatedPaymentForm.errors.unit_id" required />
+
+                    <p v-if="accumulatedUnitOptions.length === 0" class="mt-1 text-sm text-slate-500">
+                        No hay unidades con deuda acumulada hasta el periodo actual
+                    </p>
+                </div>
+
+                <div v-if="selectedAccumulatedUnit" class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                    <div class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
+                        <div>
+                            <span class="text-slate-500">Propietario:</span>
+                            <div class="mt-1 font-medium text-slate-900">{{ selectedAccumulatedUnit.owner }}</div>
+                        </div>
+                        <div>
+                            <span class="text-slate-500">Unidad:</span>
+                            <div class="mt-1 font-medium text-slate-900">{{ selectedAccumulatedUnit.uf_number }}</div>
+                        </div>
+                        <div>
+                            <span class="text-slate-500">Deuda acumulada:</span>
+                            <div class="mt-1 font-semibold text-red-600">{{ formatCurrency(accumulatedTotalDebt) }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <div class="w-full sm:flex-1">
+                        <FormInput v-model="accumulatedPaymentForm.amount" type="number" label="Monto total recibido"
+                            placeholder="0.00" :error="accumulatedPaymentForm.errors.amount" min="0" step="0.01"
+                            required />
+                    </div>
+                    <Button v-if="selectedAccumulatedUnit" type="button" variant="secondary" size="sm"
+                        @click="fillAccumulatedAmount" class="w-full sm:mb-1 sm:w-auto">
+                        Usar deuda total
+                    </Button>
+                </div>
+
+                <div v-if="accumulatedOverpayment > 0"
+                    class="flex items-center gap-2 p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">
+                    <AlertCircle class="w-4 h-4 flex-shrink-0" />
+                    <span>El monto supera la deuda acumulada por {{ formatCurrency(accumulatedOverpayment) }}.</span>
+                </div>
+
+                <div v-if="accumulatedPaymentRows.length > 0" class="overflow-hidden rounded-lg border border-slate-200">
+                    <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                        <div class="text-sm font-medium text-slate-900">Aplicacion automatica del pago</div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-[560px] w-full divide-y divide-slate-200 text-sm">
+                            <thead class="bg-white text-xs uppercase text-slate-500">
+                                <tr>
+                                    <th class="px-4 py-3 text-left font-medium">Periodo</th>
+                                    <th class="px-4 py-3 text-right font-medium">Deuda</th>
+                                    <th class="px-4 py-3 text-right font-medium">Aplica</th>
+                                    <th class="px-4 py-3 text-right font-medium">Queda</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 bg-white">
+                                <tr v-for="row in accumulatedPaymentRows" :key="row.id">
+                                    <td class="px-4 py-3 font-medium text-slate-900">{{ row.period }}</td>
+                                    <td class="px-4 py-3 text-right text-slate-700">{{ formatCurrency(row.outstanding_debt) }}</td>
+                                    <td :class="[
+                                        'px-4 py-3 text-right font-semibold',
+                                        row.applied > 0 ? 'text-emerald-700' : 'text-slate-400'
+                                    ]">
+                                        {{ formatCurrency(row.applied) }}
+                                    </td>
+                                    <td :class="[
+                                        'px-4 py-3 text-right font-semibold',
+                                        row.remaining_debt > 0 ? 'text-red-600' : 'text-emerald-700'
+                                    ]">
+                                        {{ formatCurrency(row.remaining_debt) }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <FormInput v-model="accumulatedPaymentForm.payment_date" type="date" label="Fecha de pago"
+                    :error="accumulatedPaymentForm.errors.payment_date" required />
+
+                <FormSelect v-model="accumulatedPaymentForm.payment_method" label="Metodo de pago"
+                    :options="paymentMethodOptions" :error="accumulatedPaymentForm.errors.payment_method" required />
+
+                <FormSelect v-model="accumulatedPaymentForm.bank_account" label="Cuenta bancaria" :options="bankAccounts"
+                    :error="accumulatedPaymentForm.errors.bank_account"
+                    :disabled="accumulatedPaymentForm.payment_method === 'cash'" />
+
+                <FormTextarea v-model="accumulatedPaymentForm.reference" label="Referencia / Notas"
+                    placeholder="Referencia de transaccion, numero de recibo o notas adicionales..." :rows="2"
+                    :error="accumulatedPaymentForm.errors.reference" />
+            </form>
+
             <template #footer>
                 <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
                     <Button class="w-full sm:w-auto" type="button" variant="secondary" @click="closePaymentModal">
                         Cancelar
                     </Button>
                     <Button class="w-full sm:w-auto" type="button" variant="primary"
-                        :disabled="!paymentForm.unit_id || !paymentForm.amount || paymentForm.processing"
-                        :loading="paymentForm.processing" @click="submitPayment">
+                        :disabled="paymentSubmitDisabled" :loading="paymentProcessing" @click="submitPayment">
                         <DollarSign class="w-4 h-4 mr-2" />
-                        Registrar Pago
+                        {{ paymentMode === 'period' ? 'Registrar Pago' : 'Registrar pago acumulado' }}
                     </Button>
                 </div>
             </template>
