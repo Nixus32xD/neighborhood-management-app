@@ -25,6 +25,8 @@ Route::middleware(['auth'])->group(function () {
 
 Route::middleware(['auth'])->group(function () {
     Route::resource('expenses', ExpensesController::class);
+    Route::post('/expenses/accumulated', [ExpensesController::class, 'storeAccumulated'])
+        ->name('expenses.accumulated.store');
     Route::post('/expenses/generate', [ExpensesController::class, 'generate'])
         ->name('expenses.generate');
     Route::post('/expenses/{expense}/fine', [ExpensesController::class, 'addFine'])

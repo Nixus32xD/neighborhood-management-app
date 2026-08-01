@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class ExpensesController extends Controller
@@ -26,9 +27,8 @@ class ExpensesController extends Controller
         // 1. Buscamos el barrio para obtener su configuración (CC1 o CC2)
         $neighborhood = Neighborhood::findOrFail($neighborhoodId);
 
-
         $rows = UnitExpense::with(['unit', 'unit.owners', 'payments'])
-            ->whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
+            ->whereHas('unit', fn ($q) => $q->where('neighborhood_id', $neighborhoodId))
             ->get()
 
             // Ordenamos en memoria (PHP)
@@ -45,10 +45,10 @@ class ExpensesController extends Controller
                 return [
                     'id' => $e->id,                 // unit_expense_id
                     'unit_id' => $e->unit->id,      // unit_id real
-                    'uf_number' => 'UF-' . $e->unit->uf_number,
+                    'uf_number' => 'UF-'.$e->unit->uf_number,
                     'period' => $e->period,
                     'owner' => $e->unit->owners
-                        ->map(fn($owner) => $owner->full_name)
+                        ->map(fn ($owner) => $owner->full_name)
                         ->join(', '),
                     'monthly_expense' => $e->monthly_amount,
                     'extraordinary' => $e->extraordinary_amount,
@@ -77,7 +77,7 @@ class ExpensesController extends Controller
             'neighborhoodConfig' => [
                 'type' => $neighborhood->expense_calculation_type, // 'fixed' o 'proportional'
                 'fixed_amount' => $neighborhood->fixed_amount,     // Valor default si es fijo
-            ]
+            ],
         ]);
     }
 
@@ -99,8 +99,8 @@ class ExpensesController extends Controller
             'payment_method' => 'required|string',
             'bank_account' => [
                 'nullable',
-                Rule::requiredIf(fn() => in_array($request->input('payment_method'), ['bank_transfer', 'check'], true)),
-                Rule::exists('bank_accounts', 'id')->where(fn($q) => $q->where('neighborhood_id', $neighborhoodId)),
+                Rule::requiredIf(fn () => in_array($request->input('payment_method'), ['bank_transfer', 'check'], true)),
+                Rule::exists('bank_accounts', 'id')->where(fn ($q) => $q->where('neighborhood_id', $neighborhoodId)),
             ],
             'reference' => 'nullable|string|max:255',
         ]);
@@ -130,7 +130,95 @@ class ExpensesController extends Controller
         return redirect()->back()->with('success', 'Pago registrado correctamente.');
     }
 
+    public function storeAccumulated(Request $request)
+    {
+        $neighborhoodId = session('neighborhood_id');
 
+        $data = $request->validate([
+            'unit_id' => [
+                'required',
+                Rule::exists('units', 'id')->where(fn ($q) => $q->where('neighborhood_id', $neighborhoodId)),
+            ],
+            'amount' => 'required|numeric|min:0.01',
+            'payment_date' => 'required|date',
+            'payment_method' => 'required|string',
+            'bank_account' => [
+                'nullable',
+                Rule::requiredIf(fn () => in_array($request->input('payment_method'), ['bank_transfer', 'check'], true)),
+                Rule::exists('bank_accounts', 'id')->where(fn ($q) => $q->where('neighborhood_id', $neighborhoodId)),
+            ],
+            'reference' => 'nullable|string|max:255',
+        ]);
+
+        DB::transaction(function () use ($data) {
+            $periodLimit = now()->format('Y-m');
+            $remaining = round((float) $data['amount'], 2);
+            $totalDebt = 0.0;
+
+            $debts = UnitExpense::where('unit_id', $data['unit_id'])
+                ->where('period', '<=', $periodLimit)
+                ->orderBy('period')
+                ->lockForUpdate()
+                ->get()
+                ->map(function (UnitExpense $expense) use (&$totalDebt) {
+                    $total = (float) $expense->monthly_amount
+                        + (float) $expense->extraordinary_amount
+                        + (float) $expense->fines_amount;
+
+                    $paid = (float) $expense->payments()->sum('amount');
+                    $debt = round(max(0, $total - $paid), 2);
+                    $totalDebt = round($totalDebt + $debt, 2);
+
+                    return [
+                        'expense' => $expense,
+                        'debt' => $debt,
+                    ];
+                })
+                ->filter(fn ($row) => $row['debt'] > 0)
+                ->values();
+
+            if ($totalDebt <= 0) {
+                throw ValidationException::withMessages([
+                    'unit_id' => 'La unidad no tiene deuda acumulada hasta el periodo actual.',
+                ]);
+            }
+
+            if ($remaining > $totalDebt) {
+                throw ValidationException::withMessages([
+                    'amount' => 'El monto ingresado supera la deuda acumulada. Maximo permitido: $'.number_format($totalDebt, 2, ',', '.'),
+                ]);
+            }
+
+            foreach ($debts as $row) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $expense = $row['expense'];
+                $amountToApply = round(min($remaining, $row['debt']), 2);
+
+                if ($amountToApply <= 0) {
+                    continue;
+                }
+
+                $expense->payments()->create([
+                    'unit_id' => $expense->unit_id,
+                    'amount' => $amountToApply,
+                    'payment_date' => $data['payment_date'],
+                    'payment_method' => $data['payment_method'],
+                    'bank_account_id' => $data['payment_method'] === 'cash'
+                        ? null
+                        : ($data['bank_account'] ?? null),
+                    'reference' => $data['reference'] ?? null,
+                ]);
+
+                $expense->increment('paid_amount', $amountToApply);
+                $remaining = round($remaining - $amountToApply, 2);
+            }
+        });
+
+        return redirect()->back()->with('success', 'Pago acumulado registrado correctamente.');
+    }
 
     public function generate(Request $request, ExpenseGeneratorService $generator)
     {

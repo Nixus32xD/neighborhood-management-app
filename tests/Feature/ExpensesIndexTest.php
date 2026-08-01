@@ -2,9 +2,11 @@
 
 use App\Models\Neighborhood;
 use App\Models\Owner;
+use App\Models\PaymentExpense;
 use App\Models\Unit;
 use App\Models\UnitExpense;
 use App\Models\User;
+use Carbon\Carbon;
 use Inertia\Testing\AssertableInertia;
 
 test('expenses index exposes actual paid amounts and summary collected total', function () {
@@ -181,4 +183,137 @@ test('extraordinary expense for proportional neighborhoods uses lot coefficients
 
     expect((float) $smallExpense->extraordinary_amount)->toBe(1000.0)
         ->and((float) $largeExpense->extraordinary_amount)->toBe(3000.0);
+});
+
+test('accumulated expense payment applies amount to oldest debts first', function () {
+    Carbon::setTestNow('2026-08-15');
+
+    try {
+        $neighborhood = Neighborhood::create([
+            'name' => 'CC1',
+            'expense_calculation_type' => 'fixed',
+            'fixed_amount' => 0,
+        ]);
+
+        $unit = Unit::create([
+            'neighborhood_id' => $neighborhood->id,
+            'uf_number' => '12',
+            'active' => true,
+        ]);
+
+        $january = UnitExpense::create([
+            'unit_id' => $unit->id,
+            'period' => '2026-01',
+            'monthly_amount' => 1000,
+            'extraordinary_amount' => 0,
+            'fines_amount' => 0,
+            'paid_amount' => 0,
+        ]);
+
+        $february = UnitExpense::create([
+            'unit_id' => $unit->id,
+            'period' => '2026-02',
+            'monthly_amount' => 800,
+            'extraordinary_amount' => 0,
+            'fines_amount' => 0,
+            'paid_amount' => 300,
+        ]);
+
+        $february->payments()->create([
+            'unit_id' => $unit->id,
+            'amount' => 300,
+            'payment_date' => '2026-02-10',
+            'payment_method' => 'cash',
+        ]);
+
+        $march = UnitExpense::create([
+            'unit_id' => $unit->id,
+            'period' => '2026-03',
+            'monthly_amount' => 500,
+            'extraordinary_amount' => 0,
+            'fines_amount' => 0,
+            'paid_amount' => 0,
+        ]);
+
+        $future = UnitExpense::create([
+            'unit_id' => $unit->id,
+            'period' => '2026-09',
+            'monthly_amount' => 900,
+            'extraordinary_amount' => 0,
+            'fines_amount' => 0,
+            'paid_amount' => 0,
+        ]);
+
+        $response = $this
+            ->actingAs(User::factory()->create())
+            ->withSession(['neighborhood_id' => $neighborhood->id])
+            ->post(route('expenses.accumulated.store', absolute: false), [
+                'unit_id' => $unit->id,
+                'amount' => 1500,
+                'payment_date' => '2026-08-01',
+                'payment_method' => 'cash',
+                'reference' => 'Pago acumulado test',
+            ]);
+
+        $response->assertRedirect()->assertSessionHasNoErrors();
+
+        $appliedPayments = PaymentExpense::whereIn('unit_expense_id', [$january->id, $february->id, $march->id])
+            ->where('reference', 'Pago acumulado test')
+            ->orderBy('unit_expense_id')
+            ->pluck('amount')
+            ->map(fn ($amount) => (float) $amount)
+            ->all();
+
+        expect($appliedPayments)->toBe([1000.0, 500.0])
+            ->and((float) $january->refresh()->paid_amount)->toBe(1000.0)
+            ->and((float) $february->refresh()->paid_amount)->toBe(800.0)
+            ->and((float) $march->refresh()->paid_amount)->toBe(0.0)
+            ->and($future->payments()->count())->toBe(0);
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+test('accumulated expense payment rejects amounts above current accumulated debt', function () {
+    Carbon::setTestNow('2026-08-15');
+
+    try {
+        $neighborhood = Neighborhood::create([
+            'name' => 'CC1',
+            'expense_calculation_type' => 'fixed',
+            'fixed_amount' => 0,
+        ]);
+
+        $unit = Unit::create([
+            'neighborhood_id' => $neighborhood->id,
+            'uf_number' => '15',
+            'active' => true,
+        ]);
+
+        $expense = UnitExpense::create([
+            'unit_id' => $unit->id,
+            'period' => '2026-01',
+            'monthly_amount' => 1000,
+            'extraordinary_amount' => 0,
+            'fines_amount' => 0,
+            'paid_amount' => 0,
+        ]);
+
+        $response = $this
+            ->actingAs(User::factory()->create())
+            ->withSession(['neighborhood_id' => $neighborhood->id])
+            ->post(route('expenses.accumulated.store', absolute: false), [
+                'unit_id' => $unit->id,
+                'amount' => 1500,
+                'payment_date' => '2026-08-01',
+                'payment_method' => 'cash',
+            ]);
+
+        $response->assertRedirect()->assertSessionHasErrors('amount');
+
+        expect($expense->payments()->count())->toBe(0)
+            ->and((float) $expense->refresh()->paid_amount)->toBe(0.0);
+    } finally {
+        Carbon::setTestNow();
+    }
 });
