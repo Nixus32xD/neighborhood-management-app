@@ -14,6 +14,10 @@ class PaymentExpense extends Model
         'payment_date',
         'payment_method',
         'reference',
+        'payment_type',
+        'payment_plan_id',
+        'payment_plan_installment_id',
+        'created_by',
     ];
 
     protected $casts = [
@@ -34,5 +38,20 @@ class PaymentExpense extends Model
     public function bankAccount()
     {
         return $this->belongsTo(BankAccount::class);
+    }
+
+    public function paymentPlan()
+    {
+        return $this->belongsTo(PaymentPlan::class);
+    }
+
+    public function paymentPlanInstallment()
+    {
+        return $this->belongsTo(PaymentPlanInstallment::class);
+    }
+
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

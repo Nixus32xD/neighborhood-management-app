@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Models\BankAccount;
 use App\Models\Neighborhood;
+use App\Models\PaymentPlan;
 use App\Models\UnitExpense;
 use App\Services\ExpenseGeneratorService;
+use App\Services\UnitDebtService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +21,7 @@ class ExpensesController extends Controller
     /**
      * Vista principal de expensas
      */
-    public function index()
+    public function index(UnitDebtService $debtService)
     {
         $neighborhoodId = session('neighborhood_id');
         $period = now()->format('Y-m');
@@ -27,20 +29,19 @@ class ExpensesController extends Controller
         // 1. Buscamos el barrio para obtener su configuración (CC1 o CC2)
         $neighborhood = Neighborhood::findOrFail($neighborhoodId);
 
-        $rows = UnitExpense::with(['unit', 'unit.owners', 'payments'])
+        $expenses = UnitExpense::with(['unit', 'unit.owners', 'payments'])
             ->whereHas('unit', fn ($q) => $q->where('neighborhood_id', $neighborhoodId))
             ->get()
+            ->sortBy('unit.uf_number', SORT_NATURAL);
 
-            // Ordenamos en memoria (PHP)
-            ->sortBy('unit.uf_number', SORT_NATURAL)
-
-            ->map(function ($e) {
+        $rows = $debtService->breakdownForExpenses($expenses)
+            ->map(function ($row) {
+                $e = $row['expense'];
                 $total = $e->monthly_amount
                     + $e->extraordinary_amount
                     + $e->fines_amount;
-
-                $paid = $e->payments->sum('amount');
-                $outstanding = max(0, $total - $paid);
+                $paid = $row['normal_paid'];
+                $outstanding = $row['current_outstanding'];
 
                 return [
                     'id' => $e->id,                 // unit_expense_id
@@ -55,6 +56,7 @@ class ExpensesController extends Controller
                     'fines' => $e->fines_amount,
                     'paid_amount' => (float) $paid,
                     'outstanding_debt' => $outstanding,
+                    'financed_amount' => $row['active_financed'],
                     'total_balance' => $total,
                     'status' => $outstanding === 0
                         ? 'paid'
@@ -62,10 +64,24 @@ class ExpensesController extends Controller
                 ];
             })->values();
 
+        $activePlans = PaymentPlan::with(['unit.owners', 'owner', 'installments'])
+            ->where('neighborhood_id', $neighborhoodId)->where('status', 'active')->get()
+            ->map(function (PaymentPlan $plan) {
+                $next = $plan->installments->first(fn ($installment) => $installment->status !== 'paid');
+                return [
+                    'id' => $plan->id, 'owner' => $plan->owner?->full_name ?? $plan->unit->owners->pluck('full_name')->join(', '),
+                    'uf_number' => 'UF-'.$plan->unit->uf_number, 'original_amount' => (float) $plan->original_amount,
+                    'paid_amount' => (float) $plan->paid_amount, 'outstanding_amount' => (float) $plan->outstanding_amount,
+                    'installments_count' => $plan->installments_count, 'installments_paid' => $plan->installments->where('status', 'paid')->count(),
+                    'next_installment' => $next ? ['id' => $next->id, 'number' => $next->installment_number, 'amount' => (float) $next->amount, 'paid_amount' => (float) $next->paid_amount, 'due_date' => $next->due_date?->toDateString()] : null,
+                ];
+            })->values();
+
         // dd(Carbon::now()->format('Y-m-d H:i:s'));
         return Inertia::render('Expenses/Index', [
             'expenses' => $rows,
             'bankAccounts' => BankAccount::options(),
+            'activePaymentPlans' => $activePlans,
             'summary' => [
                 'totalMonthly' => $rows->sum('monthly_expense'),
                 'totalExtraordinary' => $rows->sum('extraordinary'),
@@ -85,7 +101,7 @@ class ExpensesController extends Controller
      * Registrar pago de expensa
      * Ruta: expenses.store
      */
-    public function store(Request $request)
+    public function store(Request $request, UnitDebtService $debtService)
     {
         $neighborhoodId = session('neighborhood_id');
 
@@ -105,9 +121,14 @@ class ExpensesController extends Controller
             'reference' => 'nullable|string|max:255',
         ]);
 
-        DB::transaction(function () use ($data) {
+        DB::transaction(function () use ($data, $neighborhoodId, $debtService, $request) {
             // 2. Buscamos la expensa "Padre"
             $expense = UnitExpense::lockForUpdate()->find($data['unit_id']);
+            abort_unless($expense->unit()->where('neighborhood_id', $neighborhoodId)->exists(), 403);
+            $currentDebt = $debtService->breakdownForExpenses(collect([$expense]))->first()['current_outstanding'];
+            if ((float) $data['amount'] > $currentDebt) {
+                throw ValidationException::withMessages(['amount' => 'El monto supera la deuda corriente del período.']);
+            }
 
             // 3. Creamos el pago usando la relación
             // Laravel asigna automáticamente el unit_expense_id
@@ -120,6 +141,8 @@ class ExpensesController extends Controller
                     ? null
                     : ($data['bank_account'] ?? null),
                 'reference' => $data['reference'] ?? null,
+                'payment_type' => 'period',
+                'created_by' => $request->user()?->id,
             ]);
 
             // 4. Actualizamos el acumulado pagado en la tabla padre
@@ -130,7 +153,7 @@ class ExpensesController extends Controller
         return redirect()->back()->with('success', 'Pago registrado correctamente.');
     }
 
-    public function storeAccumulated(Request $request)
+    public function storeAccumulated(Request $request, UnitDebtService $debtService)
     {
         $neighborhoodId = session('neighborhood_id');
 
@@ -150,23 +173,20 @@ class ExpensesController extends Controller
             'reference' => 'nullable|string|max:255',
         ]);
 
-        DB::transaction(function () use ($data) {
+        DB::transaction(function () use ($data, $debtService, $request) {
             $periodLimit = now()->format('Y-m');
             $remaining = round((float) $data['amount'], 2);
             $totalDebt = 0.0;
 
-            $debts = UnitExpense::where('unit_id', $data['unit_id'])
+            $lockedExpenses = UnitExpense::with('payments')->where('unit_id', $data['unit_id'])
                 ->where('period', '<=', $periodLimit)
                 ->orderBy('period')
                 ->lockForUpdate()
-                ->get()
-                ->map(function (UnitExpense $expense) use (&$totalDebt) {
-                    $total = (float) $expense->monthly_amount
-                        + (float) $expense->extraordinary_amount
-                        + (float) $expense->fines_amount;
-
-                    $paid = (float) $expense->payments()->sum('amount');
-                    $debt = round(max(0, $total - $paid), 2);
+                ->get();
+            $debts = $debtService->breakdownForExpenses($lockedExpenses)
+                ->map(function (array $row) use (&$totalDebt) {
+                    $expense = $row['expense'];
+                    $debt = $row['current_outstanding'];
                     $totalDebt = round($totalDebt + $debt, 2);
 
                     return [
@@ -209,7 +229,9 @@ class ExpensesController extends Controller
                     'bank_account_id' => $data['payment_method'] === 'cash'
                         ? null
                         : ($data['bank_account'] ?? null),
-                    'reference' => $data['reference'] ?? null,
+                'reference' => $data['reference'] ?? null,
+                    'payment_type' => 'accumulated',
+                    'created_by' => $request->user()?->id,
                 ]);
 
                 $expense->increment('paid_amount', $amountToApply);

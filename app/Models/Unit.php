@@ -53,6 +53,11 @@ class Unit extends Model
         return $this->hasMany(UnitExpense::class);
     }
 
+    public function paymentPlans()
+    {
+        return $this->hasMany(PaymentPlan::class);
+    }
+
     /* ================= HELPERS ================= */
 
     // Expensa proporcional

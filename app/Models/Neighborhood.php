@@ -44,4 +44,9 @@ class Neighborhood extends Model
     {
         return $this->hasMany(BankMovement::class);
     }
+
+    public function paymentPlans()
+    {
+        return $this->hasMany(PaymentPlan::class);
+    }
 }

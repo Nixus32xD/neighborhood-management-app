@@ -36,6 +36,11 @@ const props = defineProps({
         type: Object,
         default: () => ({ type: 'fixed', fixed_amount: 0 })
     }
+    ,
+    activePaymentPlans: {
+        type: Array,
+        default: () => []
+    }
 })
 // --- ESTADO Y FORMULARIOS ---
 
@@ -77,6 +82,15 @@ const paymentForm = useForm({
 })
 const accumulatedPaymentForm = useForm({
     unit_id: '',
+    amount: '',
+    payment_date: '',
+    payment_method: 'bank_transfer',
+    bank_account: '',
+    reference: ''
+})
+const planPaymentForm = useForm({
+    payment_plan_id: '',
+    payment_plan_installment_id: '',
     amount: '',
     payment_date: '',
     payment_method: 'bank_transfer',
@@ -154,6 +168,15 @@ const selectedAccumulatedUnit = computed(() => {
     if (!accumulatedPaymentForm.unit_id) return null
     return props.expenses.find(exp => exp.unit_id.toString() === accumulatedPaymentForm.unit_id)
 })
+const activePlanOptions = computed(() => props.activePaymentPlans.map(plan => ({
+    value: String(plan.id),
+    label: `${plan.uf_number} - ${plan.owner} · Saldo ${formatCurrency(plan.outstanding_amount)}`
+})))
+const selectedPlan = computed(() => props.activePaymentPlans.find(plan => String(plan.id) === String(planPaymentForm.payment_plan_id)))
+const planInstallmentOptions = computed(() => selectedPlan.value?.next_installment ? [{
+    value: String(selectedPlan.value.next_installment.id),
+    label: `Cuota ${selectedPlan.value.next_installment.number} · saldo ${formatCurrency(selectedPlan.value.next_installment.amount - selectedPlan.value.next_installment.paid_amount)}`
+}] : [])
 
 const accumulatedDebts = computed(() => {
     if (!accumulatedPaymentForm.unit_id) return []
@@ -201,6 +224,9 @@ const paymentSubmitDisabled = computed(() => {
         return !paymentForm.unit_id || !paymentForm.amount || paymentForm.processing
     }
 
+    if (paymentMode.value === 'payment_plan') {
+        return !planPaymentForm.payment_plan_id || !planPaymentForm.payment_plan_installment_id || !planPaymentForm.amount || planPaymentForm.processing
+    }
     return !accumulatedPaymentForm.unit_id ||
         !accumulatedPaymentForm.amount ||
         accumulatedPaymentForm.processing ||
@@ -209,9 +235,7 @@ const paymentSubmitDisabled = computed(() => {
 })
 
 const paymentProcessing = computed(() => {
-    return paymentMode.value === 'period'
-        ? paymentForm.processing
-        : accumulatedPaymentForm.processing
+    return paymentMode.value === 'period' ? paymentForm.processing : paymentMode.value === 'payment_plan' ? planPaymentForm.processing : accumulatedPaymentForm.processing
 })
 
 // Indicador visual de cobertura del pago
@@ -334,13 +358,15 @@ const getStatusLabel = (status) => {
 
 const openPaymentModal = () => {
     paymentMode.value = 'period'
-    periodFilter.value = 'all' // 👈 CLAVE
     paymentForm.reset()
     accumulatedPaymentForm.reset()
+    planPaymentForm.reset()
     paymentForm.payment_date = getLocalDate()
     paymentForm.payment_method = 'bank_transfer'
     accumulatedPaymentForm.payment_date = getLocalDate()
     accumulatedPaymentForm.payment_method = 'bank_transfer'
+    planPaymentForm.payment_date = getLocalDate()
+    planPaymentForm.payment_method = 'bank_transfer'
     showPaymentModal.value = true
 }
 
@@ -349,6 +375,7 @@ const closePaymentModal = () => {
     showPaymentModal.value = false
     paymentForm.reset()
     accumulatedPaymentForm.reset()
+    planPaymentForm.reset()
 }
 
 const fillFullAmount = () => {
@@ -364,13 +391,13 @@ const fillAccumulatedAmount = () => {
 }
 
 const submitPayment = () => {
-    const form = paymentMode.value === 'period'
-        ? paymentForm
-        : accumulatedPaymentForm
+    const form = paymentMode.value === 'period' ? paymentForm : paymentMode.value === 'payment_plan' ? planPaymentForm : accumulatedPaymentForm
 
-    const routeName = paymentMode.value === 'period'
-        ? 'expenses.store'
-        : 'expenses.accumulated.store'
+    if (paymentMode.value === 'payment_plan') {
+        form.post(route('payment-plans.pay', planPaymentForm.payment_plan_id), { onSuccess: () => closePaymentModal() })
+        return
+    }
+    const routeName = paymentMode.value === 'period' ? 'expenses.store' : 'expenses.accumulated.store'
 
     form.post(route(routeName), {
         onSuccess: () => closePaymentModal()
@@ -466,6 +493,12 @@ watch(
         }
     }
 )
+
+watch(() => planPaymentForm.payment_plan_id, () => {
+    const installment = selectedPlan.value?.next_installment
+    planPaymentForm.payment_plan_installment_id = installment ? String(installment.id) : ''
+    planPaymentForm.amount = installment ? String(Math.max(0, Number(installment.amount) - Number(installment.paid_amount))) : ''
+})
 
 watch(
     () => accumulatedPaymentForm.payment_method,
@@ -603,7 +636,7 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
         </div>
 
         <Modal :show="showPaymentModal" title="Registrar Pago" max-width="2xl" @close="closePaymentModal">
-            <div class="mb-5 grid grid-cols-2 rounded-lg border border-slate-200 bg-slate-100 p-1 text-sm font-medium">
+            <div class="mb-5 grid grid-cols-3 rounded-lg border border-slate-200 bg-slate-100 p-1 text-sm font-medium">
                 <button type="button" :class="[
                     'inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 transition-colors',
                     paymentMode === 'period'
@@ -621,6 +654,13 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                 ]" @click="paymentMode = 'accumulated'">
                     <ListChecks class="w-4 h-4" />
                     Pago acumulado
+                </button>
+                <button type="button" :class="[
+                    'inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 transition-colors',
+                    paymentMode === 'payment_plan' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                ]" @click="paymentMode = 'payment_plan'">
+                    <ListChecks class="w-4 h-4" />
+                    Plan de pago
                 </button>
             </div>
             <p v-if="paymentMode === 'period'" class="text-xs text-slate-500">
@@ -703,7 +743,7 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                     :error="paymentForm.errors.reference" />
             </form>
 
-            <form v-else @submit.prevent="submitPayment" class="space-y-5">
+            <form v-else-if="paymentMode === 'accumulated'" @submit.prevent="submitPayment" class="space-y-5">
                 <div>
                     <FormSelect v-model="accumulatedPaymentForm.unit_id" label="Seleccionar unidad (UF)"
                         :options="accumulatedUnitOptions" placeholder="Elija una unidad con saldo pendiente"
@@ -800,6 +840,26 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                     :error="accumulatedPaymentForm.errors.reference" />
             </form>
 
+            <form v-else @submit.prevent="submitPayment" class="space-y-5">
+                <FormSelect v-model="planPaymentForm.payment_plan_id" label="Plan activo" :options="activePlanOptions"
+                    placeholder="Seleccione un plan" :error="planPaymentForm.errors.payment_plan_id" required />
+                <div v-if="selectedPlan" class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <div><span class="text-slate-500">Propietario</span><p class="font-medium">{{ selectedPlan.owner }}</p></div>
+                        <div><span class="text-slate-500">UF</span><p class="font-medium">{{ selectedPlan.uf_number }}</p></div>
+                        <div><span class="text-slate-500">Cuotas</span><p class="font-medium">{{ selectedPlan.installments_paid }}/{{ selectedPlan.installments_count }}</p></div>
+                        <div><span class="text-slate-500">Saldo</span><p class="font-semibold text-red-600">{{ formatCurrency(selectedPlan.outstanding_amount) }}</p></div>
+                    </div>
+                </div>
+                <FormSelect v-model="planPaymentForm.payment_plan_installment_id" label="Cuota a pagar" :options="planInstallmentOptions"
+                    :error="planPaymentForm.errors.payment_plan_installment_id" required />
+                <FormInput v-model="planPaymentForm.amount" type="number" min="0.01" step="0.01" label="Monto" :error="planPaymentForm.errors.amount" required />
+                <FormInput v-model="planPaymentForm.payment_date" type="date" label="Fecha de pago" :error="planPaymentForm.errors.payment_date" required />
+                <FormSelect v-model="planPaymentForm.payment_method" label="Método de pago" :options="paymentMethodOptions" :error="planPaymentForm.errors.payment_method" required />
+                <FormSelect v-model="planPaymentForm.bank_account" label="Cuenta bancaria" :options="bankAccounts" :error="planPaymentForm.errors.bank_account" :disabled="planPaymentForm.payment_method === 'cash'" />
+                <FormTextarea v-model="planPaymentForm.reference" label="Referencia / Notas" :rows="2" :error="planPaymentForm.errors.reference" />
+            </form>
+
             <template #footer>
                 <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
                     <Button class="w-full sm:w-auto" type="button" variant="secondary" @click="closePaymentModal">
@@ -808,7 +868,7 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                     <Button class="w-full sm:w-auto" type="button" variant="primary"
                         :disabled="paymentSubmitDisabled" :loading="paymentProcessing" @click="submitPayment">
                         <DollarSign class="w-4 h-4 mr-2" />
-                        {{ paymentMode === 'period' ? 'Registrar Pago' : 'Registrar pago acumulado' }}
+                        {{ paymentMode === 'period' ? 'Registrar Pago' : paymentMode === 'payment_plan' ? 'Registrar pago del plan' : 'Registrar pago acumulado' }}
                     </Button>
                 </div>
             </template>

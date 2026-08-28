@@ -5,11 +5,11 @@ use App\Http\Controllers\Dashboard\ExpensesController;
 use App\Http\Controllers\Dashboard\LotsController;
 use App\Http\Controllers\Dashboard\OwnerController;
 use App\Http\Controllers\Dashboard\OwnerStatementController;
+use App\Http\Controllers\Dashboard\PaymentPlanController;
 use App\Http\Controllers\Dashboard\PaymentsController;
 use App\Http\Controllers\Dashboard\PaymentsMethodsController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Neighborhood;
-use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -40,6 +40,14 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('payments', PaymentsController::class);
 });
 
+Route::middleware(['auth'])->group(function () {
+    Route::get('/payment-plans', [PaymentPlanController::class, 'index'])->name('payment-plans.index');
+    Route::post('/payment-plans', [PaymentPlanController::class, 'store'])->name('payment-plans.store');
+    Route::get('/payment-plans/{paymentPlan}', [PaymentPlanController::class, 'show'])->name('payment-plans.show');
+    Route::post('/payment-plans/{paymentPlan}/payments', [PaymentPlanController::class, 'pay'])->name('payment-plans.pay');
+    Route::post('/payment-plans/{paymentPlan}/cancel', [PaymentPlanController::class, 'cancel'])->name('payment-plans.cancel');
+});
+
 Route::get('/payments/{payment}/voucher', [PaymentsController::class, 'voucher'])
     ->middleware('auth')
     ->name('payments.voucher');
@@ -48,10 +56,13 @@ Route::get('/reports/payments/reconciliation/monthly', [PaymentsController::clas
     ->middleware('auth')
     ->name('payments.reconciliation.monthly');
 
+Route::get('/reports/payments/reconciliation/january-2026-static', [PaymentsController::class, 'january2026StaticReconciliation'])
+    ->middleware('auth')
+    ->name('payments.reconciliation.january-2026-static');
+
 Route::put('/payments/bank-accounts/{bankAccount}/opening-balance', [PaymentsController::class, 'updateOpeningBalance'])
     ->middleware('auth')
     ->name('payments.bank-accounts.opening-balance');
-
 
 Route::middleware(['auth'])->group(function () {
     Route::resource('payment-methods', PaymentsMethodsController::class);
@@ -70,7 +81,7 @@ Route::middleware(['auth'])->group(function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/select-neighborhood', function () {
         return Inertia::render('Auth/SelectNeighborhood', [
-            'neighborhoods' => Neighborhood::select('id', 'name')->get()
+            'neighborhoods' => Neighborhood::select('id', 'name')->get(),
         ]);
     })->name('neighborhood.select');
 
@@ -85,11 +96,10 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 
-
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';

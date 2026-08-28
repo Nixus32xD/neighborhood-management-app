@@ -75,6 +75,11 @@ class UnitExpense extends Model
         return $this->hasMany(PaymentExpense::class);
     }
 
+    public function paymentPlanItems()
+    {
+        return $this->hasMany(PaymentPlanItem::class);
+    }
+
 
 
 }

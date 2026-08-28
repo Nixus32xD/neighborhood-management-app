@@ -12,7 +12,8 @@ import {
     Menu,
     X,
     LandPlot,
-    FileSpreadsheet
+    FileSpreadsheet,
+    HandCoins
 } from 'lucide-vue-next'
 import { ref } from 'vue'
 
@@ -39,6 +40,7 @@ const navigation = [
     { name: 'Panel', href: '/dashboard', icon: Home },
     { name: 'Expensas y Honorarios', href: '/expenses', icon: DollarSign },
     { name: 'Pagos y Movimientos', href: '/payments', icon: CreditCard },
+    { name: 'Planes de Pago', href: '/payment-plans', icon: HandCoins },
     { name: 'Estado de Cuenta', href: '/owner-statements', icon: FileSpreadsheet },
     { name: 'Propietarios', href: '/owners', icon: Users },
     { name: 'Lotes', href: '/lots', icon: LandPlot },

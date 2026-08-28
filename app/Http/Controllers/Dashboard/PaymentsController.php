@@ -8,7 +8,9 @@ use App\Models\BankMovement;
 use App\Models\Neighborhood;
 use App\Models\Payment;
 use App\Models\PaymentExpense;
+use App\Models\PaymentPlan;
 use App\Models\UnitExpense;
+use App\Services\UnitDebtService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -260,7 +262,7 @@ class PaymentsController extends Controller
         return back()->with('success', 'Saldo inicial actualizado correctamente.');
     }
 
-    public function reconciliation(Request $request)
+    public function reconciliation(Request $request, UnitDebtService $debtService)
     {
         $neighborhoodId = session('neighborhood_id');
         $data = $request->validate([
@@ -274,63 +276,23 @@ class PaymentsController extends Controller
 
         $neighborhood = Neighborhood::findOrFail($neighborhoodId);
 
-        $expenses = UnitExpense::with(['unit.owners', 'payments'])
-            ->where('period', $period)
-            ->whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
-            ->get()
-            ->sortBy(fn($expense) => (int) $expense->unit->uf_number)
-            ->map(function ($expense) {
-                $monthly = (float) $expense->monthly_amount;
-                $extraordinary = (float) $expense->extraordinary_amount;
-                $fines = (float) $expense->fines_amount;
-                $total = $monthly + $extraordinary + $fines;
-                $paid = (float) $expense->payments->sum('amount');
-                $outstanding = max(0, $total - $paid);
-
-                return [
-                    'unit_id' => $expense->unit_id,
-                    'uf_number' => 'UF-' . $expense->unit->uf_number,
-                    'owner' => $expense->unit->owners->pluck('full_name')->join(', '),
-                    'monthly' => $monthly,
-                    'extraordinary' => $extraordinary,
-                    'fines' => $fines,
-                    'total' => $total,
-                    'paid' => $paid,
-                    'outstanding' => $outstanding,
-                    'status' => $outstanding <= 0 ? 'Pagado' : 'Pendiente',
-                ];
-            })
-            ->values();
-
-        $debtByOwner = UnitExpense::with(['unit.owners', 'payments'])
+        $allExpenses = UnitExpense::with(['unit.owners', 'payments'])
             ->where('period', '<=', $period)
             ->whereHas('unit', fn($q) => $q->where('neighborhood_id', $neighborhoodId))
             ->get()
-            ->groupBy('unit_id')
-            ->map(function ($unitExpenses) use ($period) {
+            ->sortBy('period');
+        $breakdownByUnit = $debtService->breakdownForExpenses($allExpenses)->groupBy(fn ($row) => $row['expense']->unit_id);
+        $activePlans = PaymentPlan::with('installments')
+            ->where('neighborhood_id', $neighborhoodId)->where('status', 'active')->get()->keyBy('unit_id');
+
+        $debtByOwner = $breakdownByUnit
+            ->map(function ($unitRows) use ($period) {
+                $unitExpenses = $unitRows->pluck('expense');
                 $first = $unitExpenses->first();
                 $owner = $first?->unit?->owners?->pluck('full_name')->join(', ') ?: '-';
                 $uf = $first?->unit?->uf_number;
-
-                $historicalOutstanding = 0.0;
-                $currentOutstanding = 0.0;
-                $totalOutstanding = 0.0;
-
-                foreach ($unitExpenses as $expense) {
-                    $charged = (float) $expense->monthly_amount
-                        + (float) $expense->extraordinary_amount
-                        + (float) $expense->fines_amount;
-                    $paid = (float) $expense->payments->sum('amount');
-                    $outstanding = max(0, $charged - $paid);
-
-                    $totalOutstanding += $outstanding;
-                    if ($expense->period < $period) {
-                        $historicalOutstanding += $outstanding;
-                    }
-                    if ($expense->period === $period) {
-                        $currentOutstanding += $outstanding;
-                    }
-                }
+                $historicalOutstanding = (float) $unitRows->filter(fn ($row) => $row['expense']->period < $period)->sum('current_outstanding');
+                $currentOutstanding = (float) $unitRows->filter(fn ($row) => $row['expense']->period === $period)->sum('current_outstanding');
 
                 return [
                     'unit_id' => $first?->unit_id,
@@ -338,49 +300,41 @@ class PaymentsController extends Controller
                     'owner' => $owner,
                     'historical_outstanding' => (float) $historicalOutstanding,
                     'current_outstanding' => (float) $currentOutstanding,
-                    'total_outstanding' => (float) $totalOutstanding,
+                    'total_outstanding' => round($historicalOutstanding + $currentOutstanding, 2),
                 ];
             })
-            ->filter(fn($row) => $row['total_outstanding'] > 0)
             ->sortBy(fn($row) => (int) str_replace('UF-', '', (string) $row['uf_number']))
             ->values();
 
-        $debtByUnit = $debtByOwner->keyBy('unit_id');
+        $expenses = $breakdownByUnit->map(function ($unitRows, $unitId) use ($period, $activePlans) {
+            $current = $unitRows->first(fn ($row) => $row['expense']->period === $period);
+            $first = $unitRows->first()['expense'];
+            $currentExpense = $current['expense'] ?? null;
+            $monthly = (float) ($currentExpense?->monthly_amount ?? 0);
+            $extraordinary = (float) ($currentExpense?->extraordinary_amount ?? 0);
+            $fines = (float) ($currentExpense?->fines_amount ?? 0);
+            $paid = (float) ($current['normal_paid'] ?? 0);
+            $historical = (float) $unitRows->filter(fn ($row) => $row['expense']->period < $period)->sum('current_outstanding');
+            $currentOutstanding = (float) ($current['current_outstanding'] ?? 0);
+            $total = round($monthly + $extraordinary + $fines + $historical, 2);
+            $outstanding = round($historical + $currentOutstanding, 2);
+            $plan = $activePlans->get($unitId);
+            $next = $plan?->installments->first(fn ($installment) => $installment->status !== 'paid');
 
-        $expenses = $expenses
-            ->map(function ($expense) use ($debtByUnit) {
-                $historicalOutstanding = (float) ($debtByUnit->get($expense['unit_id'])['historical_outstanding'] ?? 0);
-                $displayFines = (float) $expense['fines'] + $historicalOutstanding;
-                $displayOutstanding = (float) $expense['outstanding'] + $historicalOutstanding;
-
-                $expense['historical_outstanding'] = $historicalOutstanding;
-                $expense['fines'] = $displayFines;
-                $expense['total'] = (float) $expense['monthly'] + (float) $expense['extraordinary'] + $displayFines;
-                $expense['outstanding'] = $displayOutstanding;
-                $expense['status'] = $displayOutstanding <= 0 ? 'Pagado' : 'Pendiente';
-
-                return $expense;
-            })
-            ->concat(
-                $debtByOwner
-                    ->filter(fn($debt) => (float) $debt['historical_outstanding'] > 0)
-                    ->reject(fn($debt) => $expenses->contains('unit_id', $debt['unit_id']))
-                    ->map(fn($debt) => [
-                        'unit_id' => $debt['unit_id'],
-                        'uf_number' => $debt['uf_number'],
-                        'owner' => $debt['owner'],
-                        'monthly' => 0.0,
-                        'extraordinary' => 0.0,
-                        'fines' => (float) $debt['historical_outstanding'],
-                        'paid' => 0.0,
-                        'outstanding' => (float) $debt['historical_outstanding'],
-                        'total' => (float) $debt['historical_outstanding'],
-                        'status' => 'Pendiente',
-                        'historical_outstanding' => (float) $debt['historical_outstanding'],
-                    ])
-            )
-            ->sortBy(fn($row) => (int) str_replace('UF-', '', (string) $row['uf_number']))
-            ->values();
+            return [
+                'unit_id' => $unitId, 'uf_number' => 'UF-'.$first->unit->uf_number,
+                'owner' => $first->unit->owners->pluck('full_name')->join(', '), 'monthly' => $monthly,
+                'extraordinary' => $extraordinary, 'fines' => $fines, 'historical_outstanding' => $historical,
+                'total' => $total, 'paid' => $paid, 'outstanding' => $outstanding,
+                'status' => $outstanding <= 0 ? 'Pagado' : 'Pendiente',
+                'active_plan' => $plan ? [
+                    'id' => $plan->id, 'original_amount' => (float) $plan->original_amount,
+                    'paid_amount' => (float) $plan->paid_amount, 'outstanding_amount' => (float) $plan->outstanding_amount,
+                    'installments_count' => $plan->installments_count, 'installments_paid' => $plan->installments->where('status', 'paid')->count(),
+                    'next_due_date' => $next?->due_date?->toDateString(),
+                ] : null,
+            ];
+        })->filter(fn ($row) => $row['total'] > 0 || $row['active_plan'])->sortBy(fn ($row) => (int) str_replace('UF-', '', $row['uf_number']))->values();
 
         $paymentsForPeriod = Payment::with('bankAccount')
             ->where('neighborhood_id', $neighborhoodId)
@@ -464,6 +418,56 @@ class PaymentsController extends Controller
         ]);
     }
 
+    public function january2026StaticReconciliation()
+    {
+        $expenses = collect($this->january2026StaticExpenses());
+        $movements = collect($this->january2026StaticMovements());
+        $income = 3896484.21;
+        $outflow = (float) $movements->sum('accounting_total');
+
+        return response()->view('reports/monthly-reconciliation', [
+            'neighborhoodName' => 'Consorcio Habitacional Casa de Campo II',
+            'periodLabel' => 'enero 2026',
+            'generatedAt' => now('America/Argentina/Buenos_Aires')->format('d/m/Y H:i'),
+            'expenses' => $expenses,
+            'debtByOwner' => collect(),
+            'movements' => $movements,
+            'staticSummary' => [
+                'source' => 'Rendicion Enero 2026.pdf',
+                'income' => $income,
+                'outflow' => $outflow,
+                'estimated_result' => $income - $outflow,
+                'bank_balance' => 3896484.21,
+                'cash_balance' => 0.0,
+            ],
+            'availability' => [
+                ['description' => 'Saldo en c/c bancaria al 30/01/2026', 'amount' => 3896484.21],
+                ['description' => 'Saldo en efectivo al 30/01/2026', 'amount' => 0.0],
+            ],
+            'notes' => [
+                'Datos estaticos tomados del PDF. No se lee ni se escribe la base de datos.',
+                'La hoja de expensas incluida en el PDF corresponde a Expensas Febrero 2026.',
+                'El PDF indica: "De mas Gastos se desconoce y se encuentra la cuenta bancaria con este resto".',
+            ],
+            'totals' => [
+                'monthly' => (float) $expenses->sum('monthly'),
+                'extraordinary' => (float) $expenses->sum('extraordinary'),
+                'fines' => (float) $expenses->sum('fines'),
+                'charged' => (float) $expenses->sum('total'),
+                'collected' => (float) $expenses->sum('paid'),
+                'outstanding' => (float) $expenses->sum('outstanding'),
+                'historical_outstanding' => (float) $expenses->sum('fines'),
+                'cumulative_outstanding' => (float) $expenses->sum('outstanding'),
+                'income' => $income,
+                'outflow' => $outflow,
+                'debit_taxes' => 0.0,
+                'credit_taxes' => 0.0,
+                'outflow_with_taxes' => $outflow,
+                'net' => $income - $outflow,
+            ],
+        ]);
+    }
+
     /**
      * Display the specified resource.
      */
@@ -511,6 +515,71 @@ class PaymentsController extends Controller
         }
 
         return [null, null];
+    }
+
+    private function january2026StaticExpenses(): array
+    {
+        $rows = [
+            ['1', 'CARLOS SPERDUTI', 48708.96, 63321.65, 112030.61],
+            ['2', 'JOFRE MUNELLO ALEJANDRA', 47183.63, 191338.72, 238522.35],
+            ['3', 'MOSCARDELLI CORIA DANIELA', 46471.82, 0.0, 46471.82],
+            ['4', 'PARRA JOSE LUIS', 46573.50, 2302192.15, 2348765.65],
+            ['5', 'HERRERA, ROSANA', 46471.82, 150000.00, 196471.82],
+            ['6', 'FERNANDEZ, MARIANA', 46573.50, 150000.00, 196573.50],
+            ['7', 'FERNANDEZ, JOSE MANUEL', 46573.50, 0.0, 46573.50],
+            ['8', 'CALIRI PICON, MARIA LUCIA', 46573.50, 0.0, 46573.50],
+            ['9', 'CALDERON MARIANO', 46776.87, 0.0, 46776.87],
+            ['10', 'VEGA MARTIN CARLOS', 46980.26, 451099.42, 498079.68],
+            ['11', 'CHIARELLO FABIAN', 49522.47, 1676608.08, 1726130.55],
+            ['12', 'JOFRE MUNELLO, JOSEFINA', 61130.55, 1177348.58, 1238479.13],
+            ['13', 'TORRES ALEJANDRA', 47488.70, 0.0, 47488.70],
+            ['14', 'BUENO DAVID', 47183.63, 0.0, 47183.63],
+            ['15', 'MANNUCCIA, RICARDO', 46900.00, 0.0, 46900.00],
+            ['16', 'MOHAMMAD, DIEGO', 47997.14, 0.0, 47997.14],
+            ['17', 'MOHAMMAD, LUIS', 48505.59, 0.0, 48505.59],
+            ['18', 'RAMIREZ, JIMENA LUCIANA', 48912.34, 150000.00, 198912.34],
+            ['19', 'ALARCON, PAOLA DAIANA', 49420.79, 150000.00, 199420.79],
+            ['20', 'ALVAREZ, MARIA ALISA', 46675.19, 150000.00, 196675.19],
+            ['21', 'PELAYES NATALIA', 46675.19, 150000.00, 196675.19],
+        ];
+
+        return array_map(fn($row) => [
+            'unit_id' => (int) $row[0],
+            'uf_number' => 'UF-' . $row[0],
+            'owner' => $row[1],
+            'monthly' => $row[2],
+            'extraordinary' => 0.0,
+            'fines' => $row[3],
+            'total' => $row[4],
+            'paid' => 0.0,
+            'outstanding' => $row[4],
+            'status' => 'Pendiente',
+            'historical_outstanding' => $row[3],
+        ], $rows);
+    }
+
+    private function january2026StaticMovements(): array
+    {
+        return [
+            ['date' => '2026-01-31', 'description' => 'Impuesto a los Debitos y Creditos Bancarios', 'recipient' => 'Extracto Bancario', 'method' => 'Debito bancario', 'account' => 'C/C bancaria', 'accounting_total' => 16122.59],
+            ['date' => '2026-01-31', 'description' => 'Gastos y Mantenimiento de Cuentas', 'recipient' => 'Extracto Bancario', 'method' => 'Debito bancario', 'account' => 'C/C bancaria', 'accounting_total' => 65343.00],
+            ['date' => '2026-01-31', 'description' => 'Otros Gastos Bancarios (IVA)', 'recipient' => 'Extracto Bancario', 'method' => 'Debito bancario', 'account' => 'C/C bancaria', 'accounting_total' => 13722.03],
+            ['date' => '2026-01-05', 'description' => 'Seguro Federacion Patronal', 'recipient' => 'Federacion Patronal', 'method' => 'Debito automatico', 'account' => 'C/C bancaria', 'accounting_total' => 5944.00],
+            ['date' => '2026-01-28', 'description' => 'Seguro Mercantil Andina', 'recipient' => 'Mercantil Andina', 'method' => 'Debito automatico', 'account' => 'C/C bancaria', 'accounting_total' => 12895.00],
+            ['date' => '2026-01-05', 'description' => 'Debito a Cuenta: 27-25352536-9', 'recipient' => '27-25352536-9', 'method' => 'Transferencia', 'account' => 'C/C bancaria', 'accounting_total' => 110000.00],
+            ['date' => '2026-01-07', 'description' => 'Debito a Cuenta: Noble S.A', 'recipient' => 'Noble S.A', 'method' => 'Transferencia', 'account' => 'C/C bancaria', 'accounting_total' => 19799.38],
+            ['date' => '2026-01-09', 'description' => 'Gastos Varios', 'recipient' => 'Segun PDF', 'method' => 'Debin', 'account' => 'C/C bancaria', 'accounting_total' => 180000.00],
+            ['date' => '2026-01-19', 'description' => 'Debito a Cuenta: 27-25352536-9', 'recipient' => '27-25352536-9', 'method' => 'Transferencia', 'account' => 'C/C bancaria', 'accounting_total' => 50600.00],
+            ['date' => '2026-01-20', 'description' => 'Debito a Cuenta: Noble S.A', 'recipient' => 'Noble S.A', 'method' => 'Transferencia', 'account' => 'C/C bancaria', 'accounting_total' => 19172.27],
+            ['date' => '2026-01-21', 'description' => 'Debito Debin', 'recipient' => 'Segun PDF', 'method' => 'Debin', 'account' => 'C/C bancaria', 'accounting_total' => 58000.00],
+            ['date' => '2027-01-21', 'description' => 'Debito Debin - fecha segun PDF', 'recipient' => 'Segun PDF', 'method' => 'Debin', 'account' => 'C/C bancaria', 'accounting_total' => 10000.00],
+            ['date' => '2026-01-22', 'description' => 'Debito a Cuenta: Fabio', 'recipient' => 'Fabio Alejandro Noroa', 'method' => 'Transferencia', 'account' => 'C/C bancaria', 'accounting_total' => 150000.00],
+            ['date' => '2026-01-31', 'description' => 'Factura Nro 1 - Carga de Nafta', 'recipient' => 'Segun factura', 'method' => 'Factura', 'account' => 'C/C bancaria', 'accounting_total' => 50605.89],
+            ['date' => '2026-01-31', 'description' => 'Factura Nro 2 - Ferreteria Varios ISOFER', 'recipient' => 'ISOFER', 'method' => 'Factura', 'account' => 'C/C bancaria', 'accounting_total' => 56000.00],
+            ['date' => '2026-01-21', 'description' => 'Factura Nro 3 - Copias de llaves Cerrajeria', 'recipient' => 'Cerrajeria', 'method' => 'Debin', 'account' => 'C/C bancaria', 'accounting_total' => 10000.00],
+            ['date' => '2026-01-31', 'description' => 'Factura Nro 4 - Pago de Jardineria Fabio - Cancelacion', 'recipient' => 'Fabio', 'method' => 'Factura', 'account' => 'C/C bancaria', 'accounting_total' => 150000.00],
+            ['date' => '2026-01-19', 'description' => 'Factura Nro 5 - Edensa 50% venc. 23/1', 'recipient' => 'Edensa', 'method' => 'Transferencia', 'account' => 'C/C bancaria', 'accounting_total' => 144847.00],
+        ];
     }
 }
 

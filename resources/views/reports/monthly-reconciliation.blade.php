@@ -200,6 +200,52 @@
             color: #92400e;
             font-weight: 700;
         }
+
+        .print-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 14px;
+        }
+
+        .print-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 0;
+            border-radius: 8px;
+            padding: 9px 14px;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #fff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
+            transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+        }
+
+        .print-button:hover {
+            background: linear-gradient(135deg, #1d4ed8, #1e40af);
+            box-shadow: 0 5px 12px rgba(37, 99, 235, 0.32);
+            transform: translateY(-1px);
+        }
+
+        .print-button:focus-visible {
+            outline: 3px solid #93c5fd;
+            outline-offset: 2px;
+        }
+
+        @media print {
+            @page { size: A4; margin: 12mm; }
+            body { background: #fff; color: #000; margin: 0; font-size: 10px; }
+            .no-print { display: none !important; }
+            .header, .card, table, th, td { background: #fff !important; color: #000 !important; border-color: #555 !important; box-shadow: none !important; }
+            .header { border-radius: 0; }
+            .grid { display: none; }
+            table { break-inside: avoid; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            th, td { padding: 4px; }
+            .status-pill { border: 1px solid #555; background: #fff !important; color: #000 !important; }
+        }
     </style>
 </head>
 
@@ -208,7 +254,68 @@
         <h1>Rendicion mensual</h1>
         <p class="muted">{{ $neighborhoodName }} - {{ ucfirst($periodLabel) }}</p>
         <p class="muted">Generado: {{ $generatedAt }}</p>
+        @if (!empty($staticSummary['source']))
+            <p class="muted">Fuente: {{ $staticSummary['source'] }}</p>
+        @endif
     </div>
+    <div class="print-actions no-print">
+        <button class="print-button" type="button" onclick="window.print()">
+            <span aria-hidden="true">🖨</span>
+            Imprimir rendición
+        </button>
+    </div>
+    @if (!empty($staticSummary))
+        <div class="grid">
+            <div class="card card-green">
+                <div class="muted">Ingresos del periodo</div>
+                <div class="value">${{ number_format($staticSummary['income'], 2, ',', '.') }}</div>
+            </div>
+            <div class="card card-slate">
+                <div class="muted">Gastos identificados</div>
+                <div class="value">${{ number_format($staticSummary['outflow'], 2, ',', '.') }}</div>
+            </div>
+            <div class="card {{ $staticSummary['estimated_result'] >= 0 ? 'card-green' : 'card-red' }}">
+                <div class="muted">Resultado estimado</div>
+                <div class="value">${{ number_format($staticSummary['estimated_result'], 2, ',', '.') }}</div>
+            </div>
+            <div class="card card-blue">
+                <div class="muted">Saldo c/c bancaria</div>
+                <div class="value">${{ number_format($staticSummary['bank_balance'], 2, ',', '.') }}</div>
+            </div>
+            <div class="card card-cyan">
+                <div class="muted">Saldo efectivo</div>
+                <div class="value">${{ number_format($staticSummary['cash_balance'], 2, ',', '.') }}</div>
+            </div>
+        </div>
+    @endif
+
+    @if (!empty($availability))
+        <h2 class="section-title">Disponibilidades informadas</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Concepto</th>
+                    <th class="text-right">Monto</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($availability as $item)
+                    <tr>
+                        <td>{{ $item['description'] }}</td>
+                        <td class="text-right">${{ number_format($item['amount'], 2, ',', '.') }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
+
+    @if (!empty($notes))
+        <div class="card card-amber">
+            @foreach ($notes as $note)
+                <p>{{ $note }}</p>
+            @endforeach
+        </div>
+    @endif
 {{--
     <div class="grid">
         <div class="card card-blue">
@@ -260,7 +367,8 @@
                 <?php if($totals['extraordinary'] > 0): ?>
                 <th class="text-right th-extra">Extraordinaria</th>
                 <?php endif; ?>
-                <th class="text-right th-fines">Multas / intereses + deuda anterior</th>
+                <th class="text-right th-fines">Multa / Intereses</th>
+                <th class="text-right">Saldo anterior</th>
                 <th class="text-right th-paid">Pagado</th>
                 <th class="text-right th-outstanding">Pendiente</th>
                 <th>Estado</th>
@@ -280,6 +388,7 @@
                     </td>
                     <?php endif; ?>
                     <td class="text-right amount-fines">${{ number_format($expense['fines'], 2, ',', '.') }}</td>
+                    <td class="text-right">${{ number_format($expense['historical_outstanding'] ?? 0, 2, ',', '.') }}</td>
                     <td class="text-right amount-paid">${{ number_format($expense['paid'], 2, ',', '.') }}</td>
                     <td class="text-right amount-outstanding">
                         ${{ number_format($expense['outstanding'], 2, ',', '.') }}</td>
@@ -290,14 +399,29 @@
                         </span>
                     </td>
                 </tr>
+                @if (!empty($expense['active_plan']))
+                    <tr class="plan-info-row no-print">
+                        <td colspan="{{ $totals['extraordinary'] > 0 ? 10 : 9 }}">
+                            <strong>Plan de pago vigente #{{ $expense['active_plan']['id'] }}</strong> —
+                            Total original: ${{ number_format($expense['active_plan']['original_amount'], 2, ',', '.') }};
+                            Cuotas: {{ $expense['active_plan']['installments_paid'] }}/{{ $expense['active_plan']['installments_count'] }};
+                            Abonado: ${{ number_format($expense['active_plan']['paid_amount'], 2, ',', '.') }};
+                            Saldo: ${{ number_format($expense['active_plan']['outstanding_amount'], 2, ',', '.') }}
+                            @if (!empty($expense['active_plan']['next_due_date']))
+                                ; Próximo vencimiento: {{ \Carbon\Carbon::parse($expense['active_plan']['next_due_date'])->format('d/m/Y') }}
+                            @endif
+                        </td>
+                    </tr>
+                @endif
             @empty
                 <tr>
-                    <td colspan="9">No hay expensas para este periodo.</td>
+                    <td colspan="{{ $totals['extraordinary'] > 0 ? 10 : 9 }}">No hay expensas para este periodo.</td>
                 </tr>
             @endforelse
         </tbody>
     </table>
 
+    <div class="no-print">
     <h2 class="section-title">Movimientos bancarios del mes</h2>
     <table>
         <thead>
@@ -327,6 +451,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </body>
 
 </html>
