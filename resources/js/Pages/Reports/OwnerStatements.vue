@@ -110,7 +110,7 @@ const printStatement = () => {
                 <div v-if="statement.payment_plans?.length" class="rounded-lg border border-violet-200 bg-violet-50 p-4 mb-6 text-sm">
                     <h3 class="font-semibold text-violet-900">Planes de pago</h3>
                     <div v-for="plan in statement.payment_plans" :key="plan.id" class="mt-2 text-violet-900">
-                        Plan #{{ plan.id }} · {{ plan.status }} · {{ plan.installments_paid }}/{{ plan.installments_count }} cuotas ·
+                        Plan #{{ plan.id }} · {{ plan.status }} · deuda {{ formatCurrency(plan.financed_debt_amount) }} + recargo {{ formatCurrency(plan.financing_charge_amount) }} · {{ plan.installments_paid }}/{{ plan.installments_count }} cuotas ·
                         abonado {{ formatCurrency(plan.paid_amount) }} · saldo {{ formatCurrency(plan.outstanding_amount) }}
                         <span v-if="plan.next_due_date"> · próximo vencimiento {{ plan.next_due_date }}</span>
                     </div>

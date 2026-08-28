@@ -139,10 +139,10 @@
     @if (!empty($statement['payment_plans']))
         <h2>Planes de pago</h2>
         <table>
-            <thead><tr><th>Plan</th><th>Estado</th><th class="text-right">Original</th><th class="text-right">Abonado</th><th class="text-right">Saldo</th><th>Próximo vencimiento</th></tr></thead>
+            <thead><tr><th>Plan</th><th>Estado</th><th class="text-right">Deuda incluida</th><th class="text-right">Recargo</th><th class="text-right">Total acuerdo</th><th class="text-right">Abonado</th><th class="text-right">Saldo</th><th>Próximo vencimiento</th></tr></thead>
             <tbody>
                 @foreach ($statement['payment_plans'] as $plan)
-                    <tr><td>#{{ $plan['id'] }}</td><td>{{ $plan['status'] }}</td><td class="text-right">${{ number_format($plan['original_amount'], 2, ',', '.') }}</td><td class="text-right">${{ number_format($plan['paid_amount'], 2, ',', '.') }}</td><td class="text-right">${{ number_format($plan['outstanding_amount'], 2, ',', '.') }}</td><td>{{ $plan['next_due_date'] ?: '-' }}</td></tr>
+                    <tr><td>#{{ $plan['id'] }}</td><td>{{ $plan['status'] }}</td><td class="text-right">${{ number_format($plan['financed_debt_amount'], 2, ',', '.') }}</td><td class="text-right">${{ number_format($plan['financing_charge_amount'], 2, ',', '.') }}</td><td class="text-right">${{ number_format($plan['original_amount'], 2, ',', '.') }}</td><td class="text-right">${{ number_format($plan['paid_amount'], 2, ',', '.') }}</td><td class="text-right">${{ number_format($plan['outstanding_amount'], 2, ',', '.') }}</td><td>{{ $plan['next_due_date'] ?: '-' }}</td></tr>
                 @endforeach
             </tbody>
         </table>

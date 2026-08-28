@@ -33,25 +33,32 @@ class PaymentPlanService
             }
 
             $eligible = $this->debtService->breakdownForExpenses($lockedExpenses)->keyBy(fn ($row) => $row['expense']->id);
-            $total = 0.0;
+            $financedDebtAmount = 0.0;
             foreach ($selected as $expenseId => $item) {
                 $amount = round((float) $item['amount'], 2);
                 $available = (float) ($eligible->get($expenseId)['current_outstanding'] ?? 0);
                 if ($amount <= 0 || $amount > $available) {
                     throw ValidationException::withMessages(['items' => 'El importe financiado supera la deuda corriente elegible.']);
                 }
-                $total += $amount;
+                $financedDebtAmount += $amount;
             }
-            $total = round($total, 2);
+            $financedDebtAmount = round($financedDebtAmount, 2);
+            $totalAmount = round((float) ($data['total_amount'] ?? $financedDebtAmount), 2);
+            if ($totalAmount < $financedDebtAmount) {
+                throw ValidationException::withMessages(['total_amount' => 'El total del acuerdo no puede ser menor a la deuda financiada.']);
+            }
+            $financingChargeAmount = round($totalAmount - $financedDebtAmount, 2);
 
             $plan = PaymentPlan::create([
                 'neighborhood_id' => $neighborhoodId,
                 'unit_id' => $unit->id,
                 'owner_id' => $data['owner_id'] ?? null,
-                'original_amount' => $total,
+                'original_amount' => $totalAmount,
+                'financed_debt_amount' => $financedDebtAmount,
+                'financing_charge_amount' => $financingChargeAmount,
                 'installments_count' => $data['installments_count'],
                 'paid_amount' => 0,
-                'outstanding_amount' => $total,
+                'outstanding_amount' => $totalAmount,
                 'status' => 'active',
                 'start_date' => $data['start_date'],
                 'notes' => $data['notes'] ?? null,
@@ -62,8 +69,8 @@ class PaymentPlanService
                 $plan->items()->create(['unit_expense_id' => $expenseId, 'financed_amount' => round((float) $item['amount'], 2)]);
             }
 
-            $baseAmount = floor(($total / $data['installments_count']) * 100) / 100;
-            $remaining = $total;
+            $baseAmount = floor(($totalAmount / $data['installments_count']) * 100) / 100;
+            $remaining = $totalAmount;
             $startDate = Carbon::parse($data['start_date']);
             for ($number = 1; $number <= $data['installments_count']; $number++) {
                 $amount = $number === $data['installments_count'] ? $remaining : $baseAmount;
@@ -87,9 +94,13 @@ class PaymentPlanService
             if ($plan->status !== 'active') {
                 throw ValidationException::withMessages(['plan' => 'Solo se pueden cancelar planes activos.']);
             }
+            $cancelledDebtAmount = round((float) $plan->items()
+                ->selectRaw('COALESCE(SUM(financed_amount - settled_amount), 0) as total')
+                ->value('total'), 2);
+
             $plan->update([
                 'status' => 'cancelled', 'cancelled_at' => now(), 'cancelled_by' => $userId,
-                'cancellation_reason' => $reason,
+                'cancellation_reason' => $reason, 'cancelled_debt_amount' => $cancelledDebtAmount,
             ]);
             return $plan;
         });

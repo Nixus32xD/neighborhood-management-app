@@ -72,6 +72,7 @@ class PaymentPlanController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.unit_expense_id' => ['required', 'integer', 'distinct', Rule::exists('unit_expenses', 'id')],
             'items.*.amount' => ['required', 'numeric', 'min:0.01'],
+            'total_amount' => ['required', 'numeric', 'min:0.01'],
             'installments_count' => ['required', 'integer', 'min:1', 'max:120'],
             'start_date' => ['required', 'date'], 'notes' => ['nullable', 'string', 'max:3000'],
         ]);
@@ -135,7 +136,8 @@ class PaymentPlanController extends Controller
         return [
             'id' => $plan->id, 'uf_number' => 'UF-'.$plan->unit->uf_number,
             'owner' => $plan->owner?->full_name ?? $plan->unit->owners->pluck('full_name')->join(', '),
-            'original_amount' => (float) $plan->original_amount, 'paid_amount' => (float) $plan->paid_amount,
+            'original_amount' => (float) $plan->original_amount, 'financed_debt_amount' => (float) $plan->financed_debt_amount,
+            'financing_charge_amount' => (float) $plan->financing_charge_amount, 'paid_amount' => (float) $plan->paid_amount,
             'outstanding_amount' => (float) $plan->outstanding_amount, 'installments_count' => $plan->installments_count,
             'installments_paid' => $plan->installments->where('status', 'paid')->count(), 'status' => $plan->status,
             'next_installment' => $next ? ['id' => $next->id, 'number' => $next->installment_number, 'amount' => (float) $next->amount, 'paid_amount' => (float) $next->paid_amount, 'due_date' => $next->due_date?->toDateString()] : null,
@@ -144,9 +146,12 @@ class PaymentPlanController extends Controller
 
     private function detailPayload(PaymentPlan $plan): array
     {
+        $reinstatementAmount = (float) $plan->items->sum(fn ($item) => max(0, (float) $item->financed_amount - (float) $item->settled_amount));
+
         return $this->planPayload($plan) + [
             'owner_id' => $plan->owner_id, 'start_date' => $plan->start_date?->toDateString(), 'notes' => $plan->notes,
-            'cancellation_reason' => $plan->cancellation_reason, 'completed_at' => $plan->completed_at?->toDateTimeString(),
+            'cancellation_reason' => $plan->cancellation_reason, 'cancelled_debt_amount' => $plan->cancelled_debt_amount === null ? null : (float) $plan->cancelled_debt_amount,
+            'reinstatement_amount' => $reinstatementAmount, 'completed_at' => $plan->completed_at?->toDateTimeString(),
             'cancelled_at' => $plan->cancelled_at?->toDateTimeString(),
             'installments' => $plan->installments->map(fn ($item) => [
                 'id' => $item->id, 'number' => $item->installment_number, 'amount' => (float) $item->amount,

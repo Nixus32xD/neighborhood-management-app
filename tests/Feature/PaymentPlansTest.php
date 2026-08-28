@@ -27,6 +27,7 @@ function createPaymentPlanForTest(Neighborhood $neighborhood, Unit $unit, Owner 
     $response = test()->actingAs(User::factory()->create())->withSession(['neighborhood_id' => $neighborhood->id])
         ->post(route('payment-plans.store', absolute: false), [
             'unit_id' => $unit->id, 'owner_id' => $owner->id, 'installments_count' => 3, 'start_date' => '2026-08-10',
+            'total_amount' => 360000,
             'items' => $expenses->map(fn ($expense) => ['unit_expense_id' => $expense->id, 'amount' => 120000])->all(),
         ]);
     $response->assertRedirect()->assertSessionHasNoErrors();
@@ -58,6 +59,32 @@ test('creates a plan without marking original expenses as paid and excludes acti
         ->and((float) $plan->outstanding_amount)->toBe(360000.0)->and($plan->installments()->count())->toBe(3)
         ->and((float) $expenses->first()->refresh()->paid_amount)->toBe(0.0)
         ->and(app(UnitDebtService::class)->currentOutstandingForUnit($unit->id))->toBe(0.0);
+});
+
+test('a financing charge increases the agreement total without creating credit or financing future expenses', function () {
+    $neighborhood = Neighborhood::create(['name' => 'Recargo financiero', 'expense_calculation_type' => 'fixed', 'fixed_amount' => 0]);
+    $unit = Unit::create(['neighborhood_id' => $neighborhood->id, 'uf_number' => '30', 'active' => true]);
+    $owner = Owner::create(['unit_id' => $unit->id, 'full_name' => 'Propietaria Acuerdo', 'people_count' => 1]);
+    $expense = UnitExpense::create(['unit_id' => $unit->id, 'period' => '2026-08', 'monthly_amount' => 130000, 'extraordinary_amount' => 130000, 'fines_amount' => 0, 'paid_amount' => 0]);
+
+    $this->actingAs(User::factory()->create())->withSession(['neighborhood_id' => $neighborhood->id])
+        ->post(route('payment-plans.store', absolute: false), [
+            'unit_id' => $unit->id, 'owner_id' => $owner->id, 'installments_count' => 3, 'start_date' => '2026-09-10',
+            'total_amount' => 360000, 'items' => [['unit_expense_id' => $expense->id, 'amount' => 260000]],
+        ])->assertSessionHasNoErrors();
+
+    $plan = PaymentPlan::firstOrFail();
+    expect((float) $plan->financed_debt_amount)->toBe(260000.0)
+        ->and((float) $plan->financing_charge_amount)->toBe(100000.0)
+        ->and((float) $plan->original_amount)->toBe(360000.0)
+        ->and(app(UnitDebtService::class)->currentOutstandingForUnit($unit->id))->toBe(0.0);
+
+    $this->post(route('payment-plans.pay', $plan, false), ['payment_plan_installment_id' => $plan->installments()->first()->id, 'amount' => 120000, 'payment_date' => '2026-09-10', 'payment_method' => 'cash'])->assertSessionHasNoErrors();
+    $this->post(route('payment-plans.cancel', $plan, false), ['reason' => 'Incumplimiento del acuerdo'])->assertSessionHasNoErrors();
+
+    expect((float) $plan->refresh()->cancelled_debt_amount)->toBe(140000.0)
+        ->and((float) $plan->outstanding_amount)->toBe(240000.0)
+        ->and(app(UnitDebtService::class)->currentOutstandingForUnit($unit->id))->toBe(140000.0);
 });
 
 test('plan installment creates ledger income and does not impute a normal expense', function () {
