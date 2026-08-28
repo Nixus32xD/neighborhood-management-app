@@ -39,8 +39,12 @@ class PaymentPlanPaymentService
                 'paid_at' => $newInstallmentPaid >= (float) $installment->amount ? now() : null,
             ]);
 
-            $remaining = $amount;
-            foreach ($plan->items()->with('unitExpense:id,period')->get()->sortBy('unitExpense.period') as $item) {
+            // El recargo es propio del acuerdo y jamás se imputa a UnitExpense.
+            // Primero se cancela la deuda original; el remanente pagado cubre el recargo financiero.
+            $items = $plan->items()->with('unitExpense:id,period')->get()->sortBy('unitExpense.period');
+            $principalOutstanding = (float) $items->sum(fn ($item) => max(0, (float) $item->financed_amount - (float) $item->settled_amount));
+            $remaining = min($amount, $principalOutstanding);
+            foreach ($items as $item) {
                 if ($remaining <= 0) break;
                 $itemBalance = round((float) $item->financed_amount - (float) $item->settled_amount, 2);
                 $applied = min($remaining, $itemBalance);
