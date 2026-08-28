@@ -39,4 +39,9 @@ class Owner extends Model
             Unit::class
         );
     }
+
+    public function paymentPlans()
+    {
+        return $this->hasMany(PaymentPlan::class);
+    }
 }

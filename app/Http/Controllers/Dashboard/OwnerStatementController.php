@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Neighborhood;
 use App\Models\Owner;
 use App\Models\PaymentExpense;
+use App\Models\PaymentPlan;
 use App\Models\UnitExpense;
+use App\Services\UnitDebtService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -128,12 +130,13 @@ class OwnerStatementController extends Controller
 
         $expenses = $expensesQuery->get();
 
-        $rows = $expenses->map(function ($expense) use ($filterType, $dateFrom, $dateTo) {
+        $breakdown = app(UnitDebtService::class)->breakdownForExpenses($expenses)->keyBy(fn ($row) => $row['expense']->id);
+        $rows = $expenses->map(function ($expense) use ($filterType, $dateFrom, $dateTo, $breakdown) {
             $monthly = (float) $expense->monthly_amount;
             $extraordinary = (float) $expense->extraordinary_amount;
             $fines = (float) $expense->fines_amount;
             $charged = $monthly + $extraordinary + $fines;
-            $paidTotal = (float) $expense->payments->sum('amount');
+            $paidTotal = (float) $breakdown->get($expense->id)['normal_paid'];
 
             $paidInRange = $filterType === 'period'
                 ? $paidTotal
@@ -142,7 +145,7 @@ class OwnerStatementController extends Controller
                     ->where('payment_date', '<=', $dateTo)
                     ->sum('amount');
 
-            $outstanding = max(0, $charged - $paidTotal);
+            $outstanding = (float) $breakdown->get($expense->id)['current_outstanding'];
 
             return [
                 'period' => $expense->period,
@@ -178,6 +181,21 @@ class OwnerStatementController extends Controller
             ])
             ->values();
 
+        $plans = PaymentPlan::with('installments')
+            ->where('unit_id', $unitId)
+            ->whereIn('status', ['active', 'completed', 'cancelled'])
+            ->latest()
+            ->get()
+            ->map(function (PaymentPlan $plan) {
+                $next = $plan->installments->first(fn ($item) => $item->status !== 'paid');
+                return [
+                    'id' => $plan->id, 'status' => $plan->status, 'original_amount' => (float) $plan->original_amount,
+                    'paid_amount' => (float) $plan->paid_amount, 'outstanding_amount' => (float) $plan->outstanding_amount,
+                    'installments_count' => $plan->installments_count, 'installments_paid' => $plan->installments->where('status', 'paid')->count(),
+                    'next_due_date' => $next?->due_date?->toDateString(),
+                ];
+            })->values();
+
         $filterLabel = $filterType === 'period'
             ? "Periodo {$periodFrom} a {$periodTo}"
             : 'Fechas ' . Carbon::parse($dateFrom)->format('d/m/Y') . ' a ' . Carbon::parse($dateTo)->format('d/m/Y');
@@ -192,6 +210,7 @@ class OwnerStatementController extends Controller
             'filter_label' => $filterLabel,
             'charges' => $rows,
             'payments' => $payments,
+            'payment_plans' => $plans,
             'summary' => [
                 'charged_total' => (float) $rows->sum('charged'),
                 'paid_in_filter_total' => (float) $rows->sum('paid_in_filter'),

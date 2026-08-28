@@ -84,7 +84,7 @@ test('owner statement print keeps debt on the original period', function () {
     });
 });
 
-test('monthly reconciliation print merges historical debt into the main row', function () {
+test('monthly reconciliation print keeps fines and historical balance separated', function () {
     [$neighborhood] = createOwnerScenario();
 
     $response = $this
@@ -99,7 +99,8 @@ test('monthly reconciliation print merges historical debt into the main row', fu
     $response->assertViewHas('expenses', function ($expenses) {
         expect($expenses)->toHaveCount(1);
         expect($expenses[0]['paid'])->toBe(800.0);
-        expect($expenses[0]['fines'])->toBe(1000.0);
+        expect($expenses[0]['fines'])->toBe(0.0);
+        expect($expenses[0]['historical_outstanding'])->toBe(1000.0);
         expect($expenses[0]['total'])->toBe(1800.0);
         expect((float) $expenses[0]['outstanding'])->toBe(1000.0);
         expect($expenses[0]['status'])->toBe('Pendiente');
@@ -117,6 +118,36 @@ test('monthly reconciliation print merges historical debt into the main row', fu
     });
 
     $response->assertSeeInOrder(['Propietario', 'Total a Pagar', 'Mensual (a pagar)']);
-    $response->assertSeeText('Multas / intereses + deuda anterior');
-    $response->assertDontSeeText('Deuda acumulada por propietario');
+    $response->assertSeeText('Multa / Intereses');
+    $response->assertSeeText('Saldo anterior');
+    $response->assertSeeText('Imprimir');
+    $response->assertSee('no-print', false);
+    $response->assertSee('@media print', false);
+});
+
+test('static january reconciliation renders pdf data without neighborhood records', function () {
+    $response = $this
+        ->actingAs(User::factory()->create())
+        ->get(route('payments.reconciliation.january-2026-static', absolute: false));
+
+    $response->assertOk();
+    $response->assertViewIs('reports.monthly-reconciliation');
+
+    $response->assertViewHas('expenses', function ($expenses) {
+        expect($expenses)->toHaveCount(21);
+        expect($expenses[0]['owner'])->toBe('CARLOS SPERDUTI');
+        expect($expenses[3]['total'])->toBe(2348765.65);
+
+        return true;
+    });
+
+    $response->assertViewHas('movements', function ($movements) {
+        expect($movements)->toHaveCount(18);
+        expect(round((float) $movements->sum('accounting_total'), 2))->toBe(1123051.16);
+
+        return true;
+    });
+
+    $response->assertSeeText('Rendicion Enero 2026.pdf');
+    $response->assertSeeText('Saldo en c/c bancaria al 30/01/2026');
 });

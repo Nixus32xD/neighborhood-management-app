@@ -107,6 +107,15 @@ const printStatement = () => {
                     <p class="text-slate-600 mt-1">Filtro aplicado: {{ statement.filter_label }}</p>
                 </div>
 
+                <div v-if="statement.payment_plans?.length" class="rounded-lg border border-violet-200 bg-violet-50 p-4 mb-6 text-sm">
+                    <h3 class="font-semibold text-violet-900">Planes de pago</h3>
+                    <div v-for="plan in statement.payment_plans" :key="plan.id" class="mt-2 text-violet-900">
+                        Plan #{{ plan.id }} · {{ plan.status }} · {{ plan.installments_paid }}/{{ plan.installments_count }} cuotas ·
+                        abonado {{ formatCurrency(plan.paid_amount) }} · saldo {{ formatCurrency(plan.outstanding_amount) }}
+                        <span v-if="plan.next_due_date"> · próximo vencimiento {{ plan.next_due_date }}</span>
+                    </div>
+                </div>
+
                 <div class="overflow-x-auto border border-slate-200 rounded-lg mb-6">
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 border-b border-slate-200">
