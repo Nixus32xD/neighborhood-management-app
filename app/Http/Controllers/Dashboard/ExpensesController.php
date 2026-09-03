@@ -58,7 +58,7 @@ class ExpensesController extends Controller
                     'outstanding_debt' => $outstanding,
                     'financed_amount' => $row['active_financed'],
                     'total_balance' => $total,
-                    'status' => $outstanding === 0
+                    'status' => $outstanding <= 0
                         ? 'paid'
                         : ($e->period < now()->format('Y-m') ? 'overdue' : 'pending'),
                 ];

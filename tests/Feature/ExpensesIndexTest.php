@@ -76,6 +76,7 @@ test('expenses index exposes actual paid amounts and summary collected total', f
         ->has('expenses', 2)
         ->where('expenses.0.paid_amount', 1200)
         ->where('expenses.0.outstanding_debt', 0)
+        ->where('expenses.0.status', 'paid')
         ->where('expenses.1.paid_amount', 200)
         ->where('expenses.1.outstanding_debt', 450)
     );
