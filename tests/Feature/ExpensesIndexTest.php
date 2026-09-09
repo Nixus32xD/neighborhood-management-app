@@ -82,6 +82,58 @@ test('expenses index exposes actual paid amounts and summary collected total', f
     );
 });
 
+test('proportional expense generation saves its inputs and exposes the latest ones as defaults', function () {
+    $neighborhood = Neighborhood::create([
+        'name' => 'CC2',
+        'expense_calculation_type' => 'proportional',
+        'fixed_amount' => null,
+    ]);
+
+    Unit::create([
+        'neighborhood_id' => $neighborhood->id,
+        'uf_number' => '1',
+        'surface_area' => 500,
+        'expense_coefficient' => 25,
+        'active' => true,
+    ]);
+
+    Unit::create([
+        'neighborhood_id' => $neighborhood->id,
+        'uf_number' => '2',
+        'surface_area' => 1500,
+        'expense_coefficient' => 75,
+        'active' => true,
+    ]);
+
+    $this
+        ->actingAs(User::factory()->create())
+        ->withSession(['neighborhood_id' => $neighborhood->id])
+        ->post(route('expenses.generate', absolute: false), [
+            'period' => '2026-09',
+            'base_amount' => 1000,
+            'base_meters' => 500,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('expense_generations', [
+        'neighborhood_id' => $neighborhood->id,
+        'period' => '2026-09',
+        'base_amount' => 1000,
+        'base_meters' => 500,
+    ]);
+
+    $response = $this
+        ->actingAs(User::factory()->create())
+        ->withSession(['neighborhood_id' => $neighborhood->id])
+        ->get(route('expenses.index', absolute: false));
+
+    $response->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('neighborhoodConfig.last_base_amount', fn ($value) => (float) $value === 1000.0)
+        ->where('neighborhoodConfig.last_base_meters', fn ($value) => (float) $value === 500.0)
+    );
+});
+
 test('expenses index reflects unpaid fine after the monthly charge was already paid', function () {
     $neighborhood = Neighborhood::create([
         'name' => 'CC1',

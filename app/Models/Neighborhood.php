@@ -1,8 +1,9 @@
 <?php
+
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Neighborhood extends Model
 {
@@ -11,7 +12,7 @@ class Neighborhood extends Model
     protected $fillable = [
         'name',
         'expense_calculation_type',
-        'fixed_amount'
+        'fixed_amount',
 
     ];
 
@@ -48,5 +49,10 @@ class Neighborhood extends Model
     public function paymentPlans()
     {
         return $this->hasMany(PaymentPlan::class);
+    }
+
+    public function expenseGenerations()
+    {
+        return $this->hasMany(ExpenseGeneration::class);
     }
 }

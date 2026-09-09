@@ -28,6 +28,9 @@ class ExpensesController extends Controller
 
         // 1. Buscamos el barrio para obtener su configuración (CC1 o CC2)
         $neighborhood = Neighborhood::findOrFail($neighborhoodId);
+        $lastProportionalGeneration = $neighborhood->expenseGenerations()
+            ->latest('period')
+            ->first();
 
         $expenses = UnitExpense::with(['unit', 'unit.owners', 'payments'])
             ->whereHas('unit', fn ($q) => $q->where('neighborhood_id', $neighborhoodId))
@@ -93,6 +96,8 @@ class ExpensesController extends Controller
             'neighborhoodConfig' => [
                 'type' => $neighborhood->expense_calculation_type, // 'fixed' o 'proportional'
                 'fixed_amount' => $neighborhood->fixed_amount,     // Valor default si es fijo
+                'last_base_amount' => $lastProportionalGeneration?->base_amount,
+                'last_base_meters' => $lastProportionalGeneration?->base_meters,
             ],
         ]);
     }

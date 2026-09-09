@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ExpenseGeneration;
 use App\Models\Neighborhood;
 use App\Models\Unit;
 use App\Models\UnitExpense;
@@ -12,15 +13,16 @@ class ExpenseGeneratorService
     /**
      * Genera las expensas masivamente para un barrio y periodo.
      *
-     * @param Neighborhood $neighborhood El modelo del barrio (CC1 o CC2)
-     * @param string $period El periodo en formato 'Y-m' (ej: 2026-02)
-     * @param array $data Datos del formulario (monto fijo, o base para calculo)
+     * @param  Neighborhood  $neighborhood  El modelo del barrio (CC1 o CC2)
+     * @param  string  $period  El periodo en formato 'Y-m' (ej: 2026-02)
+     * @param  array  $data  Datos del formulario (monto fijo, o base para calculo)
      */
     public function generate(Neighborhood $neighborhood, string $period, array $data): void
     {
         DB::transaction(function () use ($neighborhood, $period, $data) {
             $units = $neighborhood->units;
             $totalSurface = (float) $units->sum('surface_area');
+            $generatedAny = false;
 
             foreach ($units as $unit) {
                 $alreadyExists = UnitExpense::where('unit_id', $unit->id)
@@ -74,6 +76,24 @@ class ExpenseGeneratorService
                     'extraordinary_amount' => $data['extraordinary'] ?? 0,
                     'fines_amount' => 0,
                 ]);
+
+                $generatedAny = true;
+            }
+
+            // CC2 conserva los parámetros exactos utilizados en cada período.
+            // Solo se registra cuando se crean expensas para no reescribir historia
+            // al repetir por error una generación ya existente.
+            if ($generatedAny && $neighborhood->expense_calculation_type === 'proportional') {
+                ExpenseGeneration::firstOrCreate(
+                    [
+                        'neighborhood_id' => $neighborhood->id,
+                        'period' => $period,
+                    ],
+                    [
+                        'base_amount' => $data['base_amount'],
+                        'base_meters' => $data['base_meters'],
+                    ]
+                );
             }
         });
     }

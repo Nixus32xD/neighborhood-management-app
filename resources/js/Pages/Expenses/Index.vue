@@ -34,7 +34,7 @@ const props = defineProps({
     },
     neighborhoodConfig: {
         type: Object,
-        default: () => ({ type: 'fixed', fixed_amount: 0 })
+        default: () => ({ type: 'fixed', fixed_amount: 0, last_base_amount: null, last_base_meters: null })
     }
     ,
     activePaymentPlans: {
@@ -407,6 +407,9 @@ const submitPayment = () => {
 const openGenerateModal = () => {
     if (props.neighborhoodConfig.type === 'fixed') {
         generateForm.amount = props.neighborhoodConfig.fixed_amount || ''
+    } else {
+        generateForm.base_amount = props.neighborhoodConfig.last_base_amount || ''
+        generateForm.base_meters = props.neighborhoodConfig.last_base_meters || 500
     }
     showGenerateModal.value = true
 }
@@ -901,6 +904,9 @@ console.log(fechaActual); // Resultado: "dd/mm/yyyy"
                 </div>
 
                 <div v-if="neighborhoodConfig.type === 'proportional'" class="space-y-4">
+                    <p v-if="neighborhoodConfig.last_base_amount" class="rounded border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
+                        Se precargó la última base registrada. Modificala solo si corresponde al nuevo incremento.
+                    </p>
                     <FormInput v-model="generateForm.base_amount" type="number" label="Gasto Total a Distribuir ($)"
                         placeholder="Ej: 46000" :error="generateForm.errors.base_amount" required />
 
