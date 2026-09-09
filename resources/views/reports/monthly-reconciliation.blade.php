@@ -403,7 +403,9 @@
                     <tr class="plan-info-row no-print">
                         <td colspan="{{ $totals['extraordinary'] > 0 ? 10 : 9 }}">
                             <strong>Plan de pago vigente #{{ $expense['active_plan']['id'] }}</strong> —
-                            Total original: ${{ number_format($expense['active_plan']['original_amount'], 2, ',', '.') }};
+                            Deuda incluida: ${{ number_format($expense['active_plan']['financed_debt_amount'], 2, ',', '.') }};
+                            Recargo financiero: ${{ number_format($expense['active_plan']['financing_charge_amount'], 2, ',', '.') }};
+                            Total acuerdo: ${{ number_format($expense['active_plan']['original_amount'], 2, ',', '.') }};
                             Cuotas: {{ $expense['active_plan']['installments_paid'] }}/{{ $expense['active_plan']['installments_count'] }};
                             Abonado: ${{ number_format($expense['active_plan']['paid_amount'], 2, ',', '.') }};
                             Saldo: ${{ number_format($expense['active_plan']['outstanding_amount'], 2, ',', '.') }}

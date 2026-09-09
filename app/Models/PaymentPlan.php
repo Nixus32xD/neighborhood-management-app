@@ -10,13 +10,14 @@ class PaymentPlan extends Model
     use HasFactory;
 
     protected $fillable = [
-        'neighborhood_id', 'unit_id', 'owner_id', 'original_amount', 'installments_count',
+        'neighborhood_id', 'unit_id', 'owner_id', 'original_amount', 'financed_debt_amount', 'financing_charge_amount', 'installments_count',
         'paid_amount', 'outstanding_amount', 'status', 'start_date', 'completed_at',
-        'cancelled_at', 'cancelled_by', 'cancellation_reason', 'notes', 'created_by',
+        'cancelled_at', 'cancelled_by', 'cancellation_reason', 'cancelled_debt_amount', 'notes', 'created_by',
     ];
 
     protected $casts = [
-        'original_amount' => 'decimal:2', 'paid_amount' => 'decimal:2', 'outstanding_amount' => 'decimal:2',
+        'original_amount' => 'decimal:2', 'financed_debt_amount' => 'decimal:2', 'financing_charge_amount' => 'decimal:2',
+        'paid_amount' => 'decimal:2', 'outstanding_amount' => 'decimal:2', 'cancelled_debt_amount' => 'decimal:2',
         'start_date' => 'date', 'completed_at' => 'datetime', 'cancelled_at' => 'datetime',
     ];
 

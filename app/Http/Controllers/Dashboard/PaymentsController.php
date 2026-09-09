@@ -329,6 +329,8 @@ class PaymentsController extends Controller
                 'status' => $outstanding <= 0 ? 'Pagado' : 'Pendiente',
                 'active_plan' => $plan ? [
                     'id' => $plan->id, 'original_amount' => (float) $plan->original_amount,
+                    'financed_debt_amount' => (float) $plan->financed_debt_amount,
+                    'financing_charge_amount' => (float) $plan->financing_charge_amount,
                     'paid_amount' => (float) $plan->paid_amount, 'outstanding_amount' => (float) $plan->outstanding_amount,
                     'installments_count' => $plan->installments_count, 'installments_paid' => $plan->installments->where('status', 'paid')->count(),
                     'next_due_date' => $next?->due_date?->toDateString(),
